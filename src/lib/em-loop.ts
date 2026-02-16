@@ -18,30 +18,7 @@ import {
   buildEmReviewPrompt,
   engineerNotesPath,
 } from "./prompts.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function ok(msg: string) {
-  console.log(`  \u2713 ${msg}\n`);
-}
-
-function fail(msg: string) {
-  console.log(`  \u2717 ${msg}`);
-}
-
-function divider() {
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
-}
-
-function formatDuration(ms: number): string {
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  const remainSecs = secs % 60;
-  return `${mins}m ${remainSecs}s`;
-}
+import { ok, fail, divider, formatDuration } from "./cli-utils.js";
 
 // ---------------------------------------------------------------------------
 // Result type returned to the caller

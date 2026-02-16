@@ -9,6 +9,7 @@ import {
   promptForModel,
   updateAgentModel,
 } from "../lib/agents.js";
+import { step, ok, fail } from "../lib/cli-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "../..");
@@ -104,10 +105,10 @@ export async function start(banner: string) {
   const { found, missing } = detectAllAgents();
 
   for (const agent of found) {
-    console.log(`  ✓ ${agent.name} ${agent.version} (${agent.path})`);
+    console.log(`  \u2713 ${agent.name} ${agent.version} (${agent.path})`);
   }
   for (const def of missing) {
-    console.log(`  ✗ ${def.name} not found`);
+    console.log(`  \u2717 ${def.name} not found`);
   }
   console.log();
 
@@ -131,7 +132,7 @@ export async function start(banner: string) {
     try {
       selectedModel = await promptForModel(found[0].slug);
       await updateAgentModel(found[0].slug, selectedModel);
-      console.log(`  ✓ Model: ${selectedModel ?? "auto (Cursor default)"}\n`);
+      console.log(`  \u2713 Model: ${selectedModel ?? "auto (Cursor default)"}\n`);
     } catch (err) {
       fail("Failed to set model preference.");
       if (err instanceof Error) {
@@ -139,7 +140,7 @@ export async function start(banner: string) {
       }
     }
   } else {
-    console.log("  ⚠ No AI coding agents found. Install one to get started.\n");
+    console.log("  \u26A0 No AI coding agents found. Install one to get started.\n");
   }
 
   // Step 9: Start the web UI
@@ -206,19 +207,19 @@ export async function start(banner: string) {
 
   // Print final banner
   console.log();
-  console.log("  ┌──────────────────────────────────────────┐");
-  console.log("  │          Murder is running.               │");
-  console.log("  ├──────────────────────────────────────────┤");
-  console.log("  │  Database:  localhost:1313                │");
-  console.log(`  │  Web UI:    http://localhost:${uiPort.padEnd(14)}│`);
+  console.log("  \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510");
+  console.log("  \u2502          Murder is running.               \u2502");
+  console.log("  \u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
+  console.log("  \u2502  Database:  localhost:1313                \u2502");
+  console.log(`  \u2502  Web UI:    http://localhost:${uiPort.padEnd(14)}\u2502`);
   if (defaultAgentName) {
     const padded = defaultAgentName.padEnd(28);
-    console.log(`  │  Agent:     ${padded}│`);
+    console.log(`  \u2502  Agent:     ${padded}\u2502`);
     const modelDisplay = (selectedModel ?? "auto").padEnd(28);
-    console.log(`  │  Model:     ${modelDisplay}│`);
+    console.log(`  \u2502  Model:     ${modelDisplay}\u2502`);
   }
-  console.log("  │  Jobs:      executor polling (30s)       │");
-  console.log("  └──────────────────────────────────────────┘");
+  console.log("  \u2502  Jobs:      executor polling (30s)       \u2502");
+  console.log("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518");
   console.log();
   console.log("  Run 'murder setup' to configure an AI provider.");
   console.log("  Run 'murder stop' to shut everything down.\n");
@@ -251,7 +252,7 @@ async function waitForHealthy(
   projectRoot: string,
   timeoutMs: number
 ): Promise<boolean> {
-  const spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  const spinner = ["\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F"];
   const start = Date.now();
   let i = 0;
 
@@ -315,16 +316,4 @@ function verifyExtensions(projectRoot: string): boolean {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function step(msg: string) {
-  console.log(`  ● ${msg}`);
-}
-
-function ok(msg: string) {
-  console.log(`  ✓ ${msg}\n`);
-}
-
-function fail(msg: string) {
-  console.log(`  ✗ ${msg}`);
 }

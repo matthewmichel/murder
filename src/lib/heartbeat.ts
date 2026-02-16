@@ -8,6 +8,7 @@ import {
 } from "./dispatch.js";
 import { matchStuckPattern, type StuckAction } from "./patterns.js";
 import { diagnoseOutput } from "./diagnosis.js";
+import { formatDuration } from "./cli-utils.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,20 +35,12 @@ export interface TaskResult {
 // Spinner rendering
 // ---------------------------------------------------------------------------
 
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const SPINNER = ["\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F"];
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDuration(ms: number): string {
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  const remainSecs = secs % 60;
-  return `${mins}m ${remainSecs}s`;
 }
 
 function writeSpinner(
@@ -136,7 +129,7 @@ async function handleStuckAction(
   switch (action) {
     case "kill": {
       clearLine();
-      console.log(`  ✗ ${handle.agentName} — ${diagnosis}`);
+      console.log(`  \u2717 ${handle.agentName} \u2014 ${diagnosis}`);
       killProcess(handle.pid);
       await markTaskKilled(handle.taskId, diagnosis);
       return {
@@ -150,7 +143,7 @@ async function handleStuckAction(
 
     case "retry": {
       clearLine();
-      console.log(`  ⚠ ${handle.agentName} — ${diagnosis}`);
+      console.log(`  \u26A0 ${handle.agentName} \u2014 ${diagnosis}`);
       console.log("    Will retry...");
       killProcess(handle.pid);
       await markTaskKilled(handle.taskId, diagnosis);
@@ -165,7 +158,7 @@ async function handleStuckAction(
 
     case "escalate": {
       clearLine();
-      console.log(`  ⚠ ${handle.agentName} may be stuck`);
+      console.log(`  \u26A0 ${handle.agentName} may be stuck`);
       console.log(`    Diagnosis: ${diagnosis}`);
       console.log(`    Log: ${handle.logPath}`);
       console.log(`    PID: ${handle.pid}`);
@@ -220,10 +213,10 @@ export async function monitorTask(
 
         console.log();
         if (status === "completed") {
-          console.log(`  ✓ ${handle.agentName} finished (${duration})`);
+          console.log(`  \u2713 ${handle.agentName} finished (${duration})`);
         } else {
           console.log(
-            `  ✗ ${handle.agentName} exited with code ${exitCode} (${duration})`
+            `  \u2717 ${handle.agentName} exited with code ${exitCode} (${duration})`
           );
         }
 
@@ -273,10 +266,10 @@ export async function monitorTask(
       const duration = formatDuration(elapsedMs);
 
       if (status === "completed") {
-        console.log(`\n  ✓ ${handle.agentName} finished (${duration})`);
+        console.log(`\n  \u2713 ${handle.agentName} finished (${duration})`);
       } else {
         console.log(
-          `\n  ✗ ${handle.agentName} exited with code ${exitCode} (${duration})`
+          `\n  \u2717 ${handle.agentName} exited with code ${exitCode} (${duration})`
         );
       }
 

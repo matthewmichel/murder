@@ -17,46 +17,7 @@ import {
   buildEmSynthesizePrompt,
 } from "../lib/prompts.js";
 import { promptSingleSelect, promptConfirm } from "../lib/prompt.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function step(msg: string) {
-  console.log(`  \u25CF ${msg}`);
-}
-
-function ok(msg: string) {
-  console.log(`  \u2713 ${msg}\n`);
-}
-
-function fail(msg: string) {
-  console.log(`  \u2717 ${msg}`);
-}
-
-function divider() {
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
-}
-
-function formatDuration(ms: number): string {
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  const remainSecs = secs % 60;
-  return `${mins}m ${remainSecs}s`;
-}
-
-// ---------------------------------------------------------------------------
-// Project lookup
-// ---------------------------------------------------------------------------
-
-async function getProjectId(cwd: string): Promise<string | null> {
-  const rows = await sql`
-    SELECT id FROM projects WHERE root_path = ${cwd} LIMIT 1
-  `;
-  if (rows.length === 0) return null;
-  return (rows[0] as unknown as { id: string }).id;
-}
+import { step, ok, fail, divider, formatDuration, getProjectId } from "../lib/cli-utils.js";
 
 // ---------------------------------------------------------------------------
 // Main command
@@ -66,7 +27,7 @@ export async function learn() {
   const cwd = process.cwd();
   const learnStartedAt = Date.now();
 
-  console.log("\n  Learn mode — building project knowledge...\n");
+  console.log("\n  Learn mode \u2014 building project knowledge...\n");
 
   // -----------------------------------------------------------------------
   // Setup: DB, project, agent, preflight, context
@@ -157,7 +118,7 @@ export async function learn() {
   // =====================================================================
 
   divider();
-  console.log(`  PM Agent — exploring codebase`);
+  console.log(`  PM Agent \u2014 exploring codebase`);
   console.log(`  ${agent.name} will analyze the project and`);
   console.log(`  generate questions for you at:`);
   console.log(`    ${questionsPath}`);
@@ -202,7 +163,7 @@ export async function learn() {
   // =====================================================================
 
   divider();
-  console.log(`  Your turn — answer the PM questions`);
+  console.log(`  Your turn \u2014 answer the PM questions`);
   console.log();
   console.log(`  Open this file in your editor and answer the questions:`);
   console.log(`    ${questionsPath}`);
@@ -234,7 +195,7 @@ export async function learn() {
   // =====================================================================
 
   divider();
-  console.log(`  PM Agent — synthesizing product knowledge`);
+  console.log(`  PM Agent \u2014 synthesizing product knowledge`);
   console.log(`  ${agent.name} will read your answers and create:`);
   console.log(`    ${pmOutputPath}      (current state)`);
   console.log(`    ${futureOutputPath}  (future direction)`);
@@ -289,7 +250,7 @@ export async function learn() {
     rmSync(questionsPath);
   } catch {}
 
-  ok("PM.md + FUTURE.md created — QUESTIONS.md cleaned up");
+  ok("PM.md + FUTURE.md created \u2014 QUESTIONS.md cleaned up");
 
   // Refresh context now that PM.md exists
   ctx = assembleProjectContext(cwd);
@@ -300,7 +261,7 @@ export async function learn() {
   // =====================================================================
 
   divider();
-  console.log(`  EM Agent — exploring codebase (engineering perspective)`);
+  console.log(`  EM Agent \u2014 exploring codebase (engineering perspective)`);
   console.log(`  ${agent.name} will analyze the project and`);
   console.log(`  generate technical questions at:`);
   console.log(`    ${questionsPath}`);
@@ -345,7 +306,7 @@ export async function learn() {
   // =====================================================================
 
   divider();
-  console.log(`  Your turn — answer the EM questions`);
+  console.log(`  Your turn \u2014 answer the EM questions`);
   console.log();
   console.log(`  Open this file in your editor and answer the questions:`);
   console.log(`    ${questionsPath}`);
@@ -380,7 +341,7 @@ export async function learn() {
   // =====================================================================
 
   divider();
-  console.log(`  EM Agent — synthesizing engineering knowledge`);
+  console.log(`  EM Agent \u2014 synthesizing engineering knowledge`);
   console.log(`  ${agent.name} will read your answers and create:`);
   console.log(`    ${emOutputPath}      (current state)`);
   console.log(`    ${futureOutputPath}  (update with eng items)`);
@@ -427,7 +388,7 @@ export async function learn() {
     rmSync(questionsPath);
   } catch {}
 
-  ok("EM.md created — QUESTIONS.md cleaned up");
+  ok("EM.md created \u2014 QUESTIONS.md cleaned up");
 
   // =====================================================================
   // Done
@@ -439,12 +400,12 @@ export async function learn() {
   console.log(`  Learn mode complete (${formatDuration(elapsed)})`);
   console.log();
   console.log(`  Knowledge files created/updated:`);
-  console.log(`    .murder/PM.md           — product knowledge (current state)`);
-  console.log(`    .murder/EM.md           — engineering knowledge (current state)`);
-  console.log(`    .murder/FUTURE.md       — future direction & roadmap`);
-  console.log(`    AGENTS.md               — may have been updated`);
-  console.log(`    .murder/ARCHITECTURE.md — may have been updated`);
-  console.log(`    .murder/core-beliefs.md — may have been updated`);
+  console.log(`    .murder/PM.md           \u2014 product knowledge (current state)`);
+  console.log(`    .murder/EM.md           \u2014 engineering knowledge (current state)`);
+  console.log(`    .murder/FUTURE.md       \u2014 future direction & roadmap`);
+  console.log(`    AGENTS.md               \u2014 may have been updated`);
+  console.log(`    .murder/ARCHITECTURE.md \u2014 may have been updated`);
+  console.log(`    .murder/core-beliefs.md \u2014 may have been updated`);
   console.log();
   console.log(`  These files will automatically be included in future`);
   console.log(`  agent prompts for better decision-making.`);

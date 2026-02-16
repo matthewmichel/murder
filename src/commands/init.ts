@@ -10,29 +10,7 @@ import {
 import { preflightCheck } from "../lib/preflight.js";
 import { monitorTask } from "../lib/heartbeat.js";
 import { promptSingleSelect, promptConfirm } from "../lib/prompt.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function step(msg: string) {
-  console.log(`  ● ${msg}`);
-}
-
-function ok(msg: string) {
-  console.log(`  ✓ ${msg}\n`);
-}
-
-function fail(msg: string) {
-  console.log(`  ✗ ${msg}`);
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+import { step, ok, fail, slugify } from "../lib/cli-utils.js";
 
 // ---------------------------------------------------------------------------
 // Project registration (auto-registers if not already linked)
@@ -89,7 +67,7 @@ function buildInitPrompt(scan: ProjectScan): string {
     .map(([k, v]) => `  ${k}: ${v}`)
     .join("\n");
 
-  return `# Murder Init — Project Scaffolding
+  return `# Murder Init \u2014 Project Scaffolding
 
 You are setting up this project for agent-first development. Analyze the codebase thoroughly and create files that make it navigable and legible for AI coding agents.
 
@@ -136,8 +114,8 @@ Create a detailed architecture document by actually reading the source code. Inc
 - System overview (what the app does, how data flows)
 - Key modules/directories and their responsibilities
 - Dependency graph (what depends on what)
-- Database schema (if applicable — look for migrations, schema files, ORMs)
-- API structure (if applicable — look for route files, controllers)
+- Database schema (if applicable \u2014 look for migrations, schema files, ORMs)
+- API structure (if applicable \u2014 look for route files, controllers)
 - Build and deploy pipeline
 - Known patterns (how errors are handled, how state is managed, etc.)
 
@@ -330,12 +308,12 @@ export async function init() {
   // Step 8: Build prompt and dispatch to the agent
   step(`Dispatching to ${agent.name}...`);
   console.log();
-  console.log("  ─────────────────────────────────────────");
+  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log(`  ${agent.name} is analyzing your project.`);
   console.log("  It will read the codebase and create:");
   console.log("    AGENTS.md, .murder/ARCHITECTURE.md,");
   console.log("    .murder/config.ts, .murder/core-beliefs.md");
-  console.log("  ─────────────────────────────────────────\n");
+  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n");
 
   const dispatchPrompt = buildInitPrompt(scan);
 
@@ -361,7 +339,7 @@ export async function init() {
 
   // Step 10: Post-check — verify what was created
   console.log();
-  console.log("  ─────────────────────────────────────────");
+  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
   console.log("  Results:\n");
 
   const checks = [
@@ -376,15 +354,15 @@ export async function init() {
 
   for (const check of checks) {
     if (existsSync(join(cwd, check.path))) {
-      console.log(`  ✓ ${check.label}`);
+      console.log(`  \u2713 ${check.label}`);
       created.push(check.label);
     } else {
-      console.log(`  ✗ ${check.label} (not created)`);
+      console.log(`  \u2717 ${check.label} (not created)`);
       missing.push(check.label);
     }
   }
 
-  console.log("\n  ─────────────────────────────────────────\n");
+  console.log("\n  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n");
 
   if (result.status === "killed" || result.status === "stuck") {
     if (result.diagnosis) {
@@ -392,14 +370,14 @@ export async function init() {
     }
     console.log(`  Log: ${handle.logPath}\n`);
   } else if (missing.length === 0) {
-    console.log("  ✓ Initialization complete! Your project is agent-ready.\n");
+    console.log("  \u2713 Initialization complete! Your project is agent-ready.\n");
   } else if (created.length > 0) {
     console.log(
-      `  ⚠ Partially initialized. ${missing.length} file(s) not created.`
+      `  \u26A0 Partially initialized. ${missing.length} file(s) not created.`
     );
     console.log("    Run 'murder init' again to retry.\n");
   } else {
-    console.log("  ✗ No files were created.");
+    console.log("  \u2717 No files were created.");
     if (result.exitCode !== null && result.exitCode !== 0) {
       console.log(`    Agent exited with code ${result.exitCode}.`);
     }
