@@ -9,6 +9,7 @@ interface AgentBackend {
   cli_command: string;
   cli_path: string | null;
   version: string | null;
+  preferred_model: string | null;
   is_available: boolean;
   is_default: boolean;
   detected_at: string;
@@ -30,6 +31,51 @@ const KNOWN_AGENTS: AgentDefinition[] = [
     versionFlag: "--version",
     installHint: "curl https://cursor.com/install -fsS | bash",
   },
+];
+
+// ---------------------------------------------------------------------------
+// Cursor CLI model list — duplicated from src/lib/models.ts (source of truth)
+// Keep in sync when models are added/removed there.
+// ---------------------------------------------------------------------------
+interface CursorCliModel {
+  value: string;
+  label: string;
+  hint?: string;
+}
+
+const CURSOR_CLI_MODELS: CursorCliModel[] = [
+  { value: "auto", label: "Auto (Cursor default)", hint: "Let Cursor pick the best model" },
+
+  // Anthropic — Claude
+  { value: "claude-4-opus", label: "Claude 4 Opus", hint: "Most capable" },
+  { value: "claude-4-sonnet", label: "Claude 4 Sonnet", hint: "Balanced" },
+  { value: "claude-3.7-sonnet", label: "Claude 3.7 Sonnet" },
+  { value: "claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
+  { value: "claude-3.5-haiku", label: "Claude 3.5 Haiku", hint: "Fast" },
+
+  // OpenAI — GPT
+  { value: "gpt-4.1", label: "GPT-4.1" },
+  { value: "gpt-4.1-mini", label: "GPT-4.1 Mini", hint: "Fast" },
+  { value: "gpt-4.1-nano", label: "GPT-4.1 Nano", hint: "Fastest" },
+  { value: "gpt-4o", label: "GPT-4o" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+
+  // OpenAI — o-series (reasoning)
+  { value: "o3", label: "o3", hint: "Reasoning" },
+  { value: "o3-mini", label: "o3 Mini", hint: "Reasoning, fast" },
+  { value: "o4-mini", label: "o4 Mini", hint: "Reasoning, fast" },
+
+  // Google — Gemini
+  { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash", hint: "Fast" },
+  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+
+  // xAI — Grok
+  { value: "grok-3", label: "Grok 3" },
+  { value: "grok-3-mini", label: "Grok 3 Mini", hint: "Fast" },
+
+  // Cursor
+  { value: "cursor-small", label: "Cursor Small", hint: "Fast, lightweight" },
 ];
 
 function resolveCommand(command: string): string | null {
@@ -59,7 +105,7 @@ function getVersion(command: string, flag: string): string | null {
 export async function loader() {
   const rows = await sql`
     SELECT id, slug, name, cli_command, cli_path, version,
-           is_available, is_default, detected_at
+           preferred_model, is_available, is_default, detected_at
     FROM agent_backends
     ORDER BY is_default DESC, name ASC
   `;
@@ -105,6 +151,20 @@ export async function action({ request }: { request: Request }) {
     }
 
     return { success: `Detected ${found.length} agent(s).` };
+  }
+
+  if (intent === "set-model") {
+    const agentId = form.get("agentId") as string;
+    const model = form.get("model") as string;
+    if (!agentId) return { error: "Agent ID required." };
+
+    const preferred = !model || model === "auto" ? null : model;
+    await sql`
+      UPDATE agent_backends
+      SET preferred_model = ${preferred}
+      WHERE id = ${agentId}::uuid
+    `;
+    return { success: `Model updated to ${preferred ?? "Auto"}.` };
   }
 
   if (intent === "set-default") {
@@ -181,6 +241,7 @@ export default function Agents() {
                 <th>Command</th>
                 <th>Path</th>
                 <th>Version</th>
+                <th>Model</th>
                 <th>Status</th>
                 <th>Default</th>
                 <th></th>
@@ -200,6 +261,36 @@ export default function Agents() {
                   </td>
                   <td>
                     <code className="text-xs">{agent.version ?? "—"}</code>
+                  </td>
+                  <td>
+                    {agent.is_available ? (
+                      <Form method="post" className="inline">
+                        <input type="hidden" name="intent" value="set-model" />
+                        <input type="hidden" name="agentId" value={agent.id} />
+                        <select
+                          name="model"
+                          className="select select-bordered select-xs w-48"
+                          defaultValue={agent.preferred_model ?? "auto"}
+                          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                        >
+                          {CURSOR_CLI_MODELS.map((m) => (
+                            <option key={m.value} value={m.value}>
+                              {m.label}{m.hint ? ` — ${m.hint}` : ""}
+                            </option>
+                          ))}
+                          {agent.preferred_model &&
+                            !CURSOR_CLI_MODELS.some((m) => m.value === agent.preferred_model) && (
+                              <option value={agent.preferred_model}>
+                                {agent.preferred_model} (custom)
+                              </option>
+                            )}
+                        </select>
+                      </Form>
+                    ) : (
+                      <span className="text-xs text-base-content/50">
+                        {agent.preferred_model ?? "Auto"}
+                      </span>
+                    )}
                   </td>
                   <td>
                     {agent.is_available ? (
