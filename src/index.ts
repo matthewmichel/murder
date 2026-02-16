@@ -6,6 +6,7 @@ import { project } from "./commands/project.js";
 import { init } from "./commands/init.js";
 import { newTask } from "./commands/new.js";
 import { status } from "./commands/status.js";
+import { jobs } from "./commands/jobs.js";
 
 const banner = `                                       
                         @@%#%@@        
@@ -39,6 +40,7 @@ if (!command || command === "help" || command === "--help") {
   console.log("    init         Initialize current project for agent-first development");
   console.log('    new "<prompt>"  Plan and decompose a task for agent execution');
   console.log("    status       Show active and recent agent tasks");
+  console.log("    jobs         List all scheduled jobs and recent runs");
   console.log("    stop         Stop the murder database");
   console.log("    reset        Factory reset — destroy all data and start fresh");
   console.log("    project      Link the current directory as a murder project");
@@ -59,6 +61,8 @@ if (command === "start") {
   await status();
 } else if (command === "stop") {
   stop();
+} else if (command === "jobs") {
+  await jobs();
 } else if (command === "project") {
   await project();
 } else if (command === "reset") {

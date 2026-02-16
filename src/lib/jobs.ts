@@ -217,6 +217,30 @@ export async function getStaleRuns(maxAgeMinutes: number): Promise<JobRun[]> {
   return rows as unknown as JobRun[];
 }
 
+export async function getStuckRunningRuns(): Promise<JobRun[]> {
+  const rows = await sql`
+    SELECT * FROM job_runs
+    WHERE status = 'running'
+    ORDER BY created_at ASC
+  `;
+  return rows as unknown as JobRun[];
+}
+
+export async function getEnabledJobs(): Promise<Job[]> {
+  const rows = await sql`
+    SELECT * FROM jobs WHERE is_enabled = true ORDER BY created_at ASC
+  `;
+  return rows as unknown as Job[];
+}
+
+export async function getProjectById(projectId: string): Promise<{ id: string; root_path: string; name: string } | null> {
+  const rows = await sql`
+    SELECT id, root_path, name FROM projects WHERE id = ${projectId}::uuid LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  return rows[0] as unknown as { id: string; root_path: string; name: string };
+}
+
 // ---------------------------------------------------------------------------
 // Slug generation for job runs
 // ---------------------------------------------------------------------------

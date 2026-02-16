@@ -179,6 +179,31 @@ export async function start(banner: string) {
 
   ok(`Web UI running on http://localhost:${uiPort}`);
 
+  // Step 10: Start the job executor
+  step("Starting job executor...");
+
+  const executorLogFile = join(PROJECT_ROOT, ".murder", "logs", "job-executor.log");
+  const executorLogDir = dirname(executorLogFile);
+  if (!existsSync(executorLogDir)) {
+    execSync(`mkdir -p "${executorLogDir}"`);
+  }
+  const executorOut = openSync(executorLogFile, "a");
+
+  const executorProcess = spawn(
+    "npx",
+    ["tsx", join(PROJECT_ROOT, "src", "lib", "job-executor-process.ts")],
+    {
+      cwd: PROJECT_ROOT,
+      stdio: ["ignore", executorOut, executorOut],
+      env: { ...process.env },
+      detached: true,
+    }
+  );
+
+  executorProcess.unref();
+
+  ok("Job executor running in background");
+
   // Print final banner
   console.log();
   console.log("  ┌──────────────────────────────────────────┐");
@@ -192,6 +217,7 @@ export async function start(banner: string) {
     const modelDisplay = (selectedModel ?? "auto").padEnd(28);
     console.log(`  │  Model:     ${modelDisplay}│`);
   }
+  console.log("  │  Jobs:      executor polling (30s)       │");
   console.log("  └──────────────────────────────────────────┘");
   console.log();
   console.log("  Run 'murder setup' to configure an AI provider.");
