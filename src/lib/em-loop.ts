@@ -27,6 +27,7 @@ import {
 import {
   buildEngineerPrompt,
   buildEmReviewPrompt,
+  engineerNotesPath,
 } from "./prompts.js";
 
 // ---------------------------------------------------------------------------
@@ -132,9 +133,11 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
     markPhaseStatus(progress, phaseIdx, "in_progress");
     writeProgress(progressPath, progress);
 
-    // Build prompts
-    const promptA = buildEngineerPrompt("A", phase, prdContent, projectContext);
-    const promptB = buildEngineerPrompt("B", phase, prdContent, projectContext);
+    // Build prompts (pass each engineer's notes file path so they can read/write directly)
+    const notesPathA = engineerNotesPath(planDir, "A");
+    const notesPathB = engineerNotesPath(planDir, "B");
+    const promptA = buildEngineerPrompt("A", phase, prdContent, projectContext, notesPathA);
+    const promptB = buildEngineerPrompt("B", phase, prdContent, projectContext, notesPathB);
 
     // Dispatch both engineers in parallel
     markEngineerStatus(progress, phaseIdx, "A", "in_progress");

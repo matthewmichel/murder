@@ -86,8 +86,8 @@ export function setupWorktrees(
   const engBPath = join(base, "eng-b");
   const featureBranch = featureBranchName(slug);
 
-  const engABranch = `${featureBranch}/phase-1/eng-a`;
-  const engBBranch = `${featureBranch}/phase-1/eng-b`;
+  const engABranch = `${featureBranch}--phase-1--eng-a`;
+  const engBBranch = `${featureBranch}--phase-1--eng-b`;
 
   if (!existsSync(engAPath)) {
     git(`worktree add "${engAPath}" -b ${engABranch} ${featureBranch}`, cwd);
@@ -110,8 +110,8 @@ export function phaseBranchNames(
 ): { engA: string; engB: string } {
   const base = featureBranchName(slug);
   return {
-    engA: `${base}/phase-${phaseNumber}/eng-a`,
-    engB: `${base}/phase-${phaseNumber}/eng-b`,
+    engA: `${base}--phase-${phaseNumber}--eng-a`,
+    engB: `${base}--phase-${phaseNumber}--eng-b`,
   };
 }
 

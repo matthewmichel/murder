@@ -3,7 +3,25 @@
 // Each returns a full dispatch prompt string for the Cursor CLI agent.
 // ---------------------------------------------------------------------------
 
+import { mkdirSync } from "fs";
+import { join } from "path";
 import type { Phase } from "./progress.js";
+
+// ---------------------------------------------------------------------------
+// Engineer Notes — persistent per-engineer notes that accumulate across phases
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the absolute path to an engineer's running notes file and ensure
+ * the parent directory exists. The engineer agent reads and writes this
+ * file directly — no em-loop collection step needed.
+ */
+export function engineerNotesPath(planDir: string, engineer: "A" | "B"): string {
+  const label = engineer === "A" ? "eng-a" : "eng-b";
+  const notesDir = join(planDir, "notes");
+  mkdirSync(notesDir, { recursive: true });
+  return join(notesDir, `${label}.md`);
+}
 
 /**
  * Build the prompt for the PM agent.
@@ -260,7 +278,8 @@ export function buildEngineerPrompt(
   engineer: "A" | "B",
   phase: Phase,
   prdContent: string,
-  projectContext: string
+  projectContext: string,
+  notesPath: string
 ): string {
   const taskBlock = formatPhaseTasks(phase, engineer);
 
@@ -273,6 +292,14 @@ You are working in a **git worktree** — a separate checkout of the repository 
 ## Your Tasks for This Phase
 
 ${taskBlock}
+
+## Running Notes
+
+Your running notes file is at:
+
+\`${notesPath}\`
+
+**Read this file first** if it exists — it contains your own notes from previous phases (decisions, patterns, gotchas). Then **update it before you finish** with anything the next phase should know. Keep it concise but useful.
 
 ## PRD (for context)
 
@@ -289,7 +316,7 @@ ${projectContext}
 3. **Follow existing patterns.** Read the codebase to understand conventions before writing new code. Match the style, naming, and structure of existing code.
 4. **Commit your work.** When you have completed all tasks, stage and commit your changes with a clear commit message describing what you built.
 5. **Run validation commands** if they exist in \`.murder/config.ts\` — typecheck, lint, test. Fix any errors your changes introduce.
-6. **Do NOT modify** \`.murder/\` files, \`progress.json\`, or any git configuration.
+6. **Do NOT modify** \`.murder/\` files (other than your notes file above), \`progress.json\`, or any git configuration.
 7. **Do NOT install new packages** unless explicitly required by your tasks. If you must install a package, note it clearly in your commit message.
 `;
 }
