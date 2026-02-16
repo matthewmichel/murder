@@ -1,10 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
+import { spawn } from "child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import sql from "../lib/db.js";
 import {
   getDefaultAgent,
   getAvailableAgents,
   dispatchAgent,
+  type AgentBackend,
 } from "../lib/dispatch.js";
 import { preflightCheck } from "../lib/preflight.js";
 import { monitorTask } from "../lib/heartbeat.js";
@@ -61,6 +63,151 @@ function formatDuration(ms: number): string {
   const mins = Math.floor(secs / 60);
   const remainSecs = secs % 60;
   return `${mins}m ${remainSecs}s`;
+}
+
+// ---------------------------------------------------------------------------
+// AI-powered slug generation
+// ---------------------------------------------------------------------------
+
+function extractNameFromStreamJson(rawOutput: string): string | null {
+  const lines = rawOutput.split("\n").filter((l) => l.trim());
+  const textParts: string[] = [];
+
+  for (const line of lines) {
+    try {
+      const event = JSON.parse(line);
+
+      if (
+        event.type === "system" ||
+        event.type === "tool_call" ||
+        event.type === "result"
+      ) {
+        continue;
+      }
+
+      const text =
+        (typeof event.content === "string" ? event.content : null) ||
+        (typeof event.text === "string" ? event.text : null) ||
+        (typeof event.delta === "string" ? event.delta : null) ||
+        (event.message?.content &&
+        typeof event.message.content === "string"
+          ? event.message.content
+          : null) ||
+        (event.assistant_message?.content &&
+        typeof event.assistant_message.content === "string"
+          ? event.assistant_message.content
+          : null);
+
+      if (text) {
+        textParts.push(text);
+      }
+    } catch {
+      // Not valid JSON — skip
+    }
+  }
+
+  return textParts.join("").trim() || null;
+}
+
+async function runQuickAgent(
+  agent: AgentBackend,
+  prompt: string,
+  cwd: string
+): Promise<string | null> {
+  const logsDir = join(cwd, ".murder", "logs");
+  mkdirSync(logsDir, { recursive: true });
+
+  const tmpId = `name-${Date.now()}`;
+  const promptPath = join(logsDir, `${tmpId}.prompt`);
+  writeFileSync(promptPath, prompt, "utf-8");
+
+  const modelFlag =
+    agent.preferred_model && agent.preferred_model !== "auto"
+      ? `--model '${agent.preferred_model.replace(/'/g, "'\\''")}' `
+      : "";
+
+  const cmd = `${agent.cli_command} ${modelFlag}-p --force --output-format stream-json "$(cat '${promptPath}')"`;
+
+  return new Promise<string | null>((resolve) => {
+    const proc = spawn("/bin/sh", ["-c", cmd], {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    proc.stdin?.end();
+
+    let allOutput = "";
+
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      allOutput += chunk.toString();
+    });
+
+    const timeout = setTimeout(() => {
+      try {
+        proc.kill();
+      } catch {}
+      try {
+        rmSync(promptPath);
+      } catch {}
+      resolve(null);
+    }, 30_000);
+
+    proc.on("close", () => {
+      clearTimeout(timeout);
+      try {
+        rmSync(promptPath);
+      } catch {}
+      resolve(extractNameFromStreamJson(allOutput));
+    });
+
+    proc.on("error", () => {
+      clearTimeout(timeout);
+      try {
+        rmSync(promptPath);
+      } catch {}
+      resolve(null);
+    });
+  });
+}
+
+async function generateSlugFromAgent(
+  agent: AgentBackend,
+  userPrompt: string,
+  cwd: string
+): Promise<string> {
+  const timestamp = Date.now();
+
+  const namePrompt =
+    "Generate a short, git-friendly branch name for the following task. " +
+    "Only output the generated name and nothing else. " +
+    "No quotes, no backticks, no explanation. " +
+    "Lowercase, hyphens between words, max 4 words.\n\n" +
+    `Task: ${userPrompt}`;
+
+  try {
+    const name = await runQuickAgent(agent, namePrompt, cwd);
+
+    if (name) {
+      const cleaned = name
+        .split("\n")[0]
+        .trim()
+        .toLowerCase()
+        .replace(/[`'"]/g, "")
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .replace(/-+/g, "-")
+        .slice(0, 40);
+
+      if (cleaned.length >= 3) {
+        return `${cleaned}-${timestamp}`;
+      }
+    }
+  } catch {
+    // Fall through to fallback
+  }
+
+  return `${slugify(userPrompt)}-${timestamp}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,9 +318,12 @@ export async function newTask() {
   ].filter(Boolean);
   ok(`Loaded ${contextParts.length} context files (${contextParts.join(", ")})`);
 
-  // Step 6: Git setup — create feature branch + worktree BEFORE planning
-  const slug = slugify(prompt);
+  // Step 6: Generate project name using agent
+  step("Generating project name...");
+  const slug = await generateSlugFromAgent(agent, prompt, cwd);
+  ok(`Name: ${slug}`);
 
+  // Step 7: Git setup — create feature branch + worktree BEFORE planning
   step("Checking git repository...");
   try {
     ensureGitRepo(cwd);
@@ -194,7 +344,7 @@ export async function newTask() {
   const workDir = setupWorktree(cwd, slug);
   ok(`Worktree: ${workDir}`);
 
-  // Step 7: Create exec plan directory INSIDE the worktree
+  // Step 8: Create exec plan directory INSIDE the worktree
   const planDir = join(workDir, ".murder", "exec-plans", "active", slug);
   mkdirSync(planDir, { recursive: true });
 
