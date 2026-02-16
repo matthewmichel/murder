@@ -177,22 +177,22 @@ export async function loader() {
   if (jobs.length > 0) {
     const jobIds = jobs.map((j) => j.id);
     const runRows = await sql`
-      SELECT DISTINCT ON (ranked.id)
-        ranked.*
+      SELECT
+        jr.id, jr.job_id, jr.status, jr.slug_used, jr.branch_name,
+        jr.pr_url, jr.error_message, jr.started_at, jr.completed_at,
+        jr.created_at
       FROM (
         SELECT
-          jr.id, jr.job_id, jr.status, jr.slug_used, jr.branch_name,
-          jr.pr_url, jr.error_message, jr.started_at, jr.completed_at,
-          jr.created_at,
-          ROW_NUMBER() OVER (PARTITION BY jr.job_id ORDER BY jr.created_at DESC) AS rn
-        FROM job_runs jr
-        WHERE jr.job_id = ANY(${jobIds}::uuid[])
-      ) ranked
-      WHERE ranked.rn <= 10
-      ORDER BY ranked.id, ranked.created_at DESC
+          jr2.*,
+          ROW_NUMBER() OVER (PARTITION BY jr2.job_id ORDER BY jr2.created_at DESC) AS rn
+        FROM job_runs jr2
+        WHERE jr2.job_id = ANY(${jobIds}::uuid[])
+      ) jr
+      WHERE jr.rn <= 10
+      ORDER BY jr.job_id, jr.created_at DESC
     `;
 
-    const runs = runRows as unknown as (JobRunRow & { rn: number })[];
+    const runs = runRows as unknown as JobRunRow[];
     const runsByJobId = new Map<string, JobRunRow[]>();
     for (const run of runs) {
       const list = runsByJobId.get(run.job_id) ?? [];
@@ -201,9 +201,7 @@ export async function loader() {
     }
 
     for (const job of jobs) {
-      const jobRuns = runsByJobId.get(job.id) ?? [];
-      jobRuns.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      job.runs = jobRuns;
+      job.runs = runsByJobId.get(job.id) ?? [];
     }
   } else {
     // no jobs, nothing to do
@@ -373,21 +371,14 @@ export default function Jobs() {
                             name="is_enabled"
                             value={job.is_enabled ? "false" : "true"}
                           />
-                          <label className="swap">
-                            <input
-                              type="checkbox"
-                              checked={job.is_enabled}
-                              onChange={(e) => {
-                                e.target.closest("form")?.requestSubmit();
-                              }}
-                            />
-                            <span className="swap-on">
-                              <span className="toggle toggle-success toggle-sm" data-state="checked" />
-                            </span>
-                            <span className="swap-off">
-                              <span className="toggle toggle-sm" />
-                            </span>
-                          </label>
+                          <input
+                            type="checkbox"
+                            className="toggle toggle-success toggle-sm"
+                            checked={job.is_enabled}
+                            onChange={(e) => {
+                              e.target.closest("form")?.requestSubmit();
+                            }}
+                          />
                         </Form>
                         <button
                           className="btn btn-ghost btn-xs"
