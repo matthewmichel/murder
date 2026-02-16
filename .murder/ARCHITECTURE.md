@@ -63,6 +63,7 @@ All agent work happens in an isolated git worktree (`.murder/worktrees/work/`) o
 | `start.ts` | Boots Docker, runs migrations, detects agents, starts web UI |
 | `setup.ts` | Interactive AI provider configuration (API keys, model selection) |
 | `init.ts` | Scans project, dispatches agent to generate knowledge files |
+| `learn.ts` | 6-phase knowledge refinement: PM explore → user answers → PM synthesize → EM explore → user answers → EM synthesize. Creates PM.md, EM.md, and FUTURE.md |
 | `new.ts` | Full PM → EM → Engineer pipeline with worktree isolation |
 | `status.ts` | Queries tasks table, displays active/recent tasks |
 | `stop.ts` | `docker compose down` + kills web UI process |
@@ -88,14 +89,14 @@ All agent work happens in an isolated git worktree (`.murder/worktrees/work/`) o
 - `prompts.ts` — Prompt builders for each agent role: PM (PRD generation), EM (execution planning), Engineer (phase implementation), EM Review (validation), Post-mortem PM (documentation).
 - `em-loop.ts` — Drives the phased execution loop. For each phase: dispatch engineer → monitor → dispatch EM review → monitor → advance. Tracks progress via `progress.json`.
 - `progress.ts` — Typed read/write/mutation for `progress.json`. Atomic writes via temp file + rename.
-- `context.ts` — Reads `.murder/` knowledge files (ARCHITECTURE.md, core-beliefs.md, config.ts, AGENTS.md) and formats them for prompt injection.
+- `context.ts` — Reads `.murder/` knowledge files (ARCHITECTURE.md, core-beliefs.md, config.ts, AGENTS.md, PM.md, EM.md, FUTURE.md) and formats them for prompt injection. Currently injects full file contents; the intent is to instead provide a table of contents so agents retrieve context on demand.
 
 **Project Analysis:**
 - `scanner.ts` — Scans a project directory: detects languages, frameworks, package manager, test runner, linter, formatter, CI, Docker. Builds directory tree (max depth 3, ignores node_modules/.git/etc).
 
 **Infrastructure:**
 - `db.ts` — Single `postgres.js` connection to `localhost:1313` (configurable via env vars).
-- `migrate.ts` — Runs SQL migrations from `docker/postgres/migrations/`. Tracks applied migrations in `schema_migrations` table. Handles first-run detection (Docker entrypoint may have already applied migrations).
+- `migrate.ts` — Runs SQL migrations from `docker/postgres/migrations/` by shelling out to `docker compose exec -T postgres psql`. Tracks applied migrations in `schema_migrations` table. Has first-run detection logic to handle the case where Docker entrypoint already ran migrations (this dual-path is slated for removal — `migrate.ts` should become the sole migration path).
 - `pgvector.ts` — Custom `PGVectorStore` class implementing mem0's VectorStore interface using `postgres.js` instead of `pg`. Supports HNSW indexing.
 - `worktree.ts` — Git worktree management: create feature branch, set up worktree, cleanup, create PR via `gh` CLI.
 - `prompt.ts` — Zero-dependency interactive CLI prompts using raw stdin. Single-select, multi-select, text input, secret input, yes/no confirm.
@@ -171,10 +172,10 @@ Postgres 18 running in Docker on port 1313. Migrations in `docker/postgres/migra
 - `id` UUID PK, `project_id` FK → projects (NULL = global), `provider_key_id` FK → ai_provider_keys, `capability` (embeddings|orchestration), `model_name`, `is_active`
 - Unique partial indexes enforce one config per capability per project and one global default per capability
 
-**`conversations`** — Agent session tracking
+**`conversations`** — Agent session tracking (unused — slated for removal)
 - `id` UUID PK, `project_id` FK, `title`, `summary`, `status` (active|completed|archived), `message_count`
 
-**`conversation_messages`** — Individual messages within conversations
+**`conversation_messages`** — Individual messages within conversations (unused — slated for removal)
 - `id` UUID PK, `conversation_id` FK, `role` (user|assistant|system|tool), `content`, `token_count`, `model_used`
 
 **`agent_backends`** — Detected agent CLI tools
@@ -216,3 +217,5 @@ murder runs entirely locally. There is no deploy pipeline.
 **Output modes:** Agent dispatch supports three modes — `inherit` (full TTY passthrough), `stream-json` (parsed NDJSON events with progress display), `pipe` (silent log capture for background tasks).
 
 **Prompt architecture:** Each agent role (PM, EM, Engineer, Review) gets a structured prompt with project context injected. Prompts instruct agents to read `AGENTS.md` first, then work within the project's conventions.
+
+**Knowledge refinement (`murder learn`):** A 6-phase interactive pipeline: PM agent explores codebase → generates QUESTIONS.md → user answers → PM agent synthesizes into PM.md + FUTURE.md → EM agent explores → generates QUESTIONS.md → user answers → EM agent synthesizes into EM.md + updates FUTURE.md. Context is refreshed between phases so later agents see earlier outputs. Designed to be repeatable as the codebase evolves. PM.md and EM.md capture current state only; FUTURE.md captures all forward-looking plans and roadmap items.

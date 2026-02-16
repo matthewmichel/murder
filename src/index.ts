@@ -6,6 +6,7 @@ import { project } from "./commands/project.js";
 import { init } from "./commands/init.js";
 import { newTask } from "./commands/new.js";
 import { status } from "./commands/status.js";
+import { learn } from "./commands/learn.js";
 
 const banner = `                                       
                         @@%#%@@        
@@ -38,6 +39,7 @@ if (!command || command === "help" || command === "--help") {
   console.log("    setup        Configure an AI provider (API key + models)");
   console.log("    init         Initialize current project for agent-first development");
   console.log('    new "<prompt>"  Plan and decompose a task for agent execution');
+  console.log("    learn        Build project knowledge through guided Q&A");
   console.log("    status       Show active and recent agent tasks");
   console.log("    stop         Stop the murder database");
   console.log("    reset        Factory reset — destroy all data and start fresh");
@@ -55,6 +57,8 @@ if (command === "start") {
   await init();
 } else if (command === "new") {
   await newTask();
+} else if (command === "learn") {
+  await learn();
 } else if (command === "status") {
   await status();
 } else if (command === "stop") {

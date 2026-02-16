@@ -21,11 +21,11 @@ murder is a local CLI tool that orchestrates AI coding agents (currently Cursor 
 ```
 src/
 ├── index.ts              CLI entry point — routes commands to handlers
-├── commands/             Command implementations (init, new, start, stop, setup, status, project, reset)
+├── commands/             Command implementations (init, learn, new, start, stop, setup, status, project, reset)
 ├── lib/                  Core library modules
 │   ├── ai.ts             AI provider resolution + model factories
 │   ├── agents.ts         Agent detection, registration, model selection
-│   ├── context.ts        Reads .murder/ knowledge files for prompt injection
+│   ├── context.ts        Reads .murder/ knowledge files (including PM.md, EM.md, FUTURE.md) for prompt injection
 │   ├── crypto.ts         AES-256-GCM encrypt/decrypt for API keys
 │   ├── db.ts             Postgres connection (postgres.js)
 │   ├── diagnosis.ts      AI-powered stuck agent diagnosis
@@ -39,11 +39,11 @@ src/
 │   ├── preflight.ts      Smoke tests agent CLI before dispatch
 │   ├── progress.ts       progress.json read/write/mutation for exec plans
 │   ├── prompt.ts         Interactive CLI prompts (select, text, confirm, secret)
-│   ├── prompts.ts        Prompt builders for PM, EM, Engineer, Review agents
+│   ├── prompts.ts        Prompt builders for PM, EM, Engineer, Review agents + learn mode (explore/synthesize)
 │   ├── providers.ts      AI provider CRUD (keys, configs)
 │   ├── scanner.ts        Project analysis (languages, frameworks, scripts, configs)
 │   └── worktree.ts       Git worktree + branch management for isolated agent work
-└── mcp/                  (placeholder) MCP server integration
+└── mcp/                  (unused — slated for removal)
 
 web/                      Management web UI (React Router v7)
 ├── app/
@@ -75,6 +75,7 @@ npx tsc --noEmit
 | `murder start` | Boots Docker DB, runs migrations, detects agents, starts web UI on :1314 |
 | `murder setup` | Interactive wizard to configure AI provider (API key + models) |
 | `murder init` | Scans cwd, dispatches agent to generate AGENTS.md + .murder/ knowledge files |
+| `murder learn` | Build project knowledge through guided PM Q&A → synthesis → EM Q&A → synthesis pipeline. Creates PM.md, EM.md, and FUTURE.md |
 | `murder new "<prompt>"` | Full pipeline: PM writes PRD → EM creates plan → Engineer executes phases → EM reviews → Post-mortem → PR |
 | `murder status` | Shows active and recent agent tasks |
 | `murder stop` | Stops Docker containers + web UI |
@@ -105,3 +106,5 @@ npx tsc --noEmit
 
 See `.murder/ARCHITECTURE.md` for system architecture, data flow, dependency graph, and database schema.
 See `.murder/core-beliefs.md` for code style conventions and patterns.
+See `.murder/PM.md` for product knowledge, decisions, and business rules.
+See `.murder/FUTURE.md` for planned features, roadmap, and future direction.
