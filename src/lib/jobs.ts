@@ -207,10 +207,11 @@ export async function getPendingRuns(): Promise<PendingRunWithJob[]> {
 }
 
 export async function getStaleRuns(maxAgeMinutes: number): Promise<JobRun[]> {
+  const intervalStr = `${maxAgeMinutes} minutes`;
   const rows = await sql`
     SELECT * FROM job_runs
     WHERE status = 'pending'
-      AND created_at < NOW() - (${maxAgeMinutes} || ' minutes')::interval
+      AND created_at < NOW() - ${intervalStr}::interval
     ORDER BY created_at ASC
   `;
   return rows as unknown as JobRun[];
