@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import sql from "./db.js";
-import { promptSingleSelect } from "./prompt.js";
+import { CURSOR_CLI_MODELS } from "./models.js";
+import { promptSingleSelect, promptText } from "./prompt.js";
 
 // ---------------------------------------------------------------------------
 // Agent definitions
@@ -106,6 +107,53 @@ export async function promptForDefault(
   const items = agents.map((a) => ({ label: a.name }));
   const idx = await promptSingleSelect(items, "Select your default agent:");
   return agents[idx];
+}
+
+// ---------------------------------------------------------------------------
+// Model selection
+// ---------------------------------------------------------------------------
+
+/**
+ * Prompt the user to select a Cursor CLI model for the given agent.
+ * Returns the model slug, or null if "auto" is selected.
+ */
+export async function promptForModel(
+  agentSlug: string
+): Promise<string | null> {
+  if (agentSlug !== "cursor-cli") return null;
+
+  const items: { label: string; hint?: string }[] = CURSOR_CLI_MODELS.map((m) => ({
+    label: m.label,
+    hint: m.hint,
+  }));
+  items.push({ label: "Custom…" });
+
+  const idx = await promptSingleSelect(items, "Select a Cursor CLI model:");
+  const picked = items[idx];
+
+  if (picked.label === "Custom…") {
+    const custom = await promptText("  Model name:");
+    return custom;
+  }
+
+  const model = CURSOR_CLI_MODELS[idx];
+  if (model.value === "auto") return null;
+  return model.value;
+}
+
+/**
+ * Persist the preferred model for an agent backend.
+ * Pass null to clear the preference (auto).
+ */
+export async function updateAgentModel(
+  slug: string,
+  model: string | null
+): Promise<void> {
+  await sql`
+    UPDATE agent_backends
+    SET preferred_model = ${model}
+    WHERE slug = ${slug}
+  `;
 }
 
 // ---------------------------------------------------------------------------

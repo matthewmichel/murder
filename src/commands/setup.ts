@@ -1,4 +1,5 @@
 import sql from "../lib/db.js";
+import { promptForModel, updateAgentModel } from "../lib/agents.js";
 import {
   getSeededProviders,
   storeProviderKey,
@@ -152,6 +153,21 @@ export async function setup() {
     } else {
       console.log("  ⚠ Skipped (no model entered)\n");
     }
+  }
+
+  // --- Step 5: Optional Cursor CLI model selection ---
+  try {
+    const agents = await sql`
+      SELECT slug FROM agent_backends WHERE slug = 'cursor-cli' AND is_available = true LIMIT 1
+    `;
+    if (agents.length > 0) {
+      console.log("  ● Cursor CLI model configuration\n");
+      const model = await promptForModel("cursor-cli");
+      await updateAgentModel("cursor-cli", model);
+      console.log(`  ✓ Cursor CLI model: ${model ?? "auto (Cursor default)"}\n`);
+    }
+  } catch {
+    // Agent not registered yet or DB issue — skip silently
   }
 
   // --- Done ---

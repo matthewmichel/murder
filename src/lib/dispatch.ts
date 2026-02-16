@@ -14,6 +14,7 @@ export interface AgentBackend {
   cli_command: string;
   cli_path: string;
   version: string;
+  preferred_model?: string | null;
 }
 
 export interface TaskHandle {
@@ -33,7 +34,7 @@ export interface TaskHandle {
 
 export async function getDefaultAgent(): Promise<AgentBackend | null> {
   const rows = await sql`
-    SELECT slug, name, cli_command, cli_path, version
+    SELECT slug, name, cli_command, cli_path, version, preferred_model
     FROM agent_backends
     WHERE is_available = true AND is_default = true
     LIMIT 1
@@ -45,7 +46,7 @@ export async function getDefaultAgent(): Promise<AgentBackend | null> {
 
 export async function getAvailableAgents(): Promise<AgentBackend[]> {
   const rows = await sql`
-    SELECT slug, name, cli_command, cli_path, version
+    SELECT slug, name, cli_command, cli_path, version, preferred_model
     FROM agent_backends
     WHERE is_available = true
     ORDER BY is_default DESC, name ASC
@@ -256,19 +257,27 @@ function writePromptFile(logsDir: string, taskId: string, prompt: string): strin
 /**
  * Build a shell command string for the given output format.
  * Currently only supports Cursor CLI (agent command).
+ *
+ * When a preferred_model is set (and is not "auto"), prepends --model <name>
+ * before -p so the agent uses the specified model.
  */
 function buildShellCommand(
   agent: AgentBackend,
   promptFilePath: string,
-  outputFormat: OutputFormat
+  outputFormat: OutputFormat,
+  preferredModel?: string | null
 ): string {
   const promptArg = `"$(cat '${promptFilePath}')"`;
+  const modelFlag =
+    preferredModel && preferredModel !== "auto"
+      ? `--model '${preferredModel.replace(/'/g, "'\\''")}' `
+      : "";
 
   if (outputFormat === "stream-json") {
-    return `${agent.cli_command} -p --force --output-format stream-json ${promptArg}`;
+    return `${agent.cli_command} ${modelFlag}-p --force --output-format stream-json ${promptArg}`;
   }
 
-  return `${agent.cli_command} -p --force ${promptArg}`;
+  return `${agent.cli_command} ${modelFlag}-p --force ${promptArg}`;
 }
 
 /**
@@ -298,7 +307,7 @@ export async function dispatchAgent(
   const logPath = join(logsDir, `${taskId}.log`);
 
   const promptFilePath = writePromptFile(logsDir, taskId, prompt);
-  const shellCmd = buildShellCommand(agent, promptFilePath, outputFormat);
+  const shellCmd = buildShellCommand(agent, promptFilePath, outputFormat, agent.preferred_model);
 
   let logStream: WriteStream | null = null;
 

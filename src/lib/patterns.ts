@@ -59,6 +59,12 @@ const CURSOR_PATTERNS: StuckPattern[] = [
       "Cursor CLI is not authenticated. Open Cursor IDE to sign in first.",
     action: "kill",
   },
+  {
+    regex: /model not available|invalid model|unknown model/i,
+    diagnosis:
+      "The configured model is not available. Update the preferred model in agent settings (murder start or web UI).",
+    action: "kill",
+  },
 ];
 
 // ---------------------------------------------------------------------------
