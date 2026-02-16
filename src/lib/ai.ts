@@ -138,7 +138,7 @@ export async function getLanguageModel(
  */
 export async function getEmbeddingModel(
   projectId?: string
-): Promise<EmbeddingModel<string>> {
+): Promise<EmbeddingModel> {
   const c = await resolveConfig("embeddings", projectId);
   const key = `${c.slug}:${c.keyAlias}`;
 

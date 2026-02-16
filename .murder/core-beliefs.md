@@ -12,9 +12,9 @@ Derived from the actual codebase patterns. Follow these when contributing.
 ## Code Style
 
 - **No external CLI framework** — commands are plain async functions, routing is a simple if/else chain in `src/index.ts`
-- **No external prompt library** — all interactive prompts (select menus, text input, secret input, confirmations) are implemented from scratch using raw stdin in `src/lib/prompt.ts`
-- **Minimal dependencies** — the project avoids pulling in packages when a focused implementation suffices. The prompt system, migration runner, and pgvector store are all hand-rolled.
-- **Console output formatting** — use `step()`, `ok()`, `fail()` helper functions for consistent CLI output. Prefix with two spaces for indentation. Use Unicode symbols: `●` for steps, `✓` for success, `✗` for failure, `⚠` for warnings.
+- **Custom prompt system (migration planned)** — interactive prompts are currently implemented from scratch using raw stdin in `src/lib/prompt.ts`. This was built without awareness of standard CLI prompt libraries and is planned to be replaced with an established library like inquirer or prompts.
+- **Pragmatic dependencies** — the project prefers standard, well-maintained packages over hand-rolled implementations when they exist. The migration runner is hand-rolled for simplicity. Use standard approaches that are common across CLI tools.
+- **Console output formatting** — use `step()`, `ok()`, `fail()` helper functions for consistent CLI output. Prefix with two spaces for indentation. Use Unicode symbols: `●` for steps, `✓` for success, `✗` for failure, `⚠` for warnings. These helpers are currently duplicated across command files and should be extracted into a shared utility module (e.g., `src/lib/cli-utils.ts`).
 
 ## File Organization
 
@@ -25,7 +25,7 @@ Derived from the actual codebase patterns. Follow these when contributing.
 
 ## Database Patterns
 
-- **Raw SQL via postgres.js** — no ORM. Use tagged template literals: `` sql`SELECT * FROM table WHERE id = ${id}` ``
+- **Raw SQL via postgres.js** — currently no ORM. Use tagged template literals: `` sql`SELECT * FROM table WHERE id = ${id}` ``. A migration to Drizzle ORM is being considered for the future to get typed query results.
 - **UUID primary keys** — all tables use `gen_random_uuid()` defaults
 - **JSONB metadata columns** — tables include a `metadata JSONB NOT NULL DEFAULT '{}'` column for extensibility
 - **Timestamps** — `created_at` and `updated_at` with `set_updated_at()` trigger function
@@ -45,9 +45,13 @@ Derived from the actual codebase patterns. Follow these when contributing.
 
 - **Provider abstraction** — AI providers are resolved from the database at runtime. The `resolveConfig()` function handles global vs project-scoped configs with fallback.
 - **Provider caching** — provider instances are cached in a `Map` keyed by `slug:keyAlias` so key rotation invalidates the cache.
-- **Prompt-as-file** — long prompts are written to temp files and read via `$(cat 'path')` to avoid shell argument length limits.
+- **Prompt-as-file** — long prompts are written to temp files in `.murder/logs/` and read via `$(cat 'path')` to avoid shell argument length limits. Prompt files MUST be cleaned up after the agent finishes successfully to avoid accumulating sensitive data (they contain full project context).
 - **Three-tier monitoring** — stuck detection uses: (1) cheap regex patterns, (2) expensive AI diagnosis (run once per silence window), (3) human escalation as last resort.
 - **Conservative stuck detection** — killing a working agent is worse than waiting. The system defaults to "continue" when uncertain.
+- **Agent-first direction** — all AI work should go through agent backends (Cursor CLI, etc.), not through direct model API calls. The Vercel AI SDK (`ai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`) is slated for removal. Do not add new code that calls AI APIs directly from murder — dispatch to the agent instead.
+- **Context as table of contents, not full injection** — the intent is for agent prompts to describe what each `.murder/` knowledge file contains and where it lives, so agents can retrieve context on demand. The current implementation (`formatContextForPrompt()`) injects full file contents, which is a known issue that needs to be fixed.
+- **Context refresh between phases** — when a multi-phase command (like `murder learn`) produces knowledge files mid-run, it re-assembles project context so later phases see the new files.
+- **If/else for agent backends** — when adding new agent backends (Claude Code, Codex CLI), use if/else branches in `buildShellCommand()` and `displayStreamEvent()` rather than an adapter/strategy pattern. Keep it simple.
 
 ## Git & Worktree Conventions
 
@@ -78,8 +82,8 @@ Derived from the actual codebase patterns. Follow these when contributing.
 ## What NOT to Do
 
 - Do not create database functions or triggers for business logic
-- Do not use an ORM — stick with raw SQL via postgres.js
-- Do not add external CLI prompt libraries (inquirer, prompts, etc.)
+- Do not use an ORM yet — stick with raw SQL via postgres.js (Drizzle migration is planned but not started)
+- Do not add new hand-rolled implementations when a standard library exists — prefer established packages for CLI interactions
 - Do not run `supabase db push`
 - Do not create markdown summary files unless explicitly asked
 - Do not use class components in React — functional components only
