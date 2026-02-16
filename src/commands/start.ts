@@ -6,6 +6,8 @@ import { runMigrations } from "../lib/migrate.js";
 import {
   detectAllAgents,
   registerAgentBackends,
+  promptForModel,
+  updateAgentModel,
 } from "../lib/agents.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -110,6 +112,7 @@ export async function start(banner: string) {
   console.log();
 
   let defaultAgentName: string | null = null;
+  let selectedModel: string | null = null;
 
   if (found.length > 0) {
     const defaultSlug = found[0].slug;
@@ -119,6 +122,18 @@ export async function start(banner: string) {
       ok(`Registered ${found.length} agent(s), default: ${defaultAgentName}`);
     } catch (err) {
       fail("Failed to register agent backends.");
+      if (err instanceof Error) {
+        console.log(`\n  ${err.message}\n`);
+      }
+    }
+
+    // Prompt for preferred Cursor CLI model
+    try {
+      selectedModel = await promptForModel(found[0].slug);
+      await updateAgentModel(found[0].slug, selectedModel);
+      console.log(`  ✓ Model: ${selectedModel ?? "auto (Cursor default)"}\n`);
+    } catch (err) {
+      fail("Failed to set model preference.");
       if (err instanceof Error) {
         console.log(`\n  ${err.message}\n`);
       }
@@ -174,6 +189,8 @@ export async function start(banner: string) {
   if (defaultAgentName) {
     const padded = defaultAgentName.padEnd(28);
     console.log(`  │  Agent:     ${padded}│`);
+    const modelDisplay = (selectedModel ?? "auto").padEnd(28);
+    console.log(`  │  Model:     ${modelDisplay}│`);
   }
   console.log("  └──────────────────────────────────────────┘");
   console.log();
