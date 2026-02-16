@@ -1,0 +1,22 @@
+services:
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    ports:
+      - "1313:5432"
+    environment:
+      POSTGRES_USER: murder
+      POSTGRES_PASSWORD: murder
+      POSTGRES_DB: murder
+    volumes:
+      - murder_pgdata:/var/lib/postgresql
+      - ./docker/postgres/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U murder -d murder"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  murder_pgdata:

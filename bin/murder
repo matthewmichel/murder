@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Resolve symlinks to find the real project root
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+PROJECT_ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+exec "$PROJECT_ROOT/node_modules/.bin/tsx" "$PROJECT_ROOT/src/index.ts" "$@"
