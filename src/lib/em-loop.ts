@@ -14,14 +14,6 @@ import {
   advancePhase,
 } from "./progress.js";
 import {
-  ensureGitRepo,
-  ensureCleanWorktree,
-  createFeatureBranch,
-  setupWorktree,
-  cleanupWorktree,
-  createPullRequest,
-} from "./worktree.js";
-import {
   buildEngineerPrompt,
   buildEmReviewPrompt,
   engineerNotesPath,
@@ -30,10 +22,6 @@ import {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function step(msg: string) {
-  console.log(`  \u25CF ${msg}`);
-}
 
 function ok(msg: string) {
   console.log(`  \u2713 ${msg}\n`);
@@ -56,11 +44,23 @@ function formatDuration(ms: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Result type returned to the caller
+// ---------------------------------------------------------------------------
+
+export interface EmLoopResult {
+  status: "completed" | "failed";
+  totalElapsedMs: number;
+  phasesCompleted: number;
+  totalPhases: number;
+}
+
+// ---------------------------------------------------------------------------
 // Main EM Loop — single engineer, phased execution with manager review
 // ---------------------------------------------------------------------------
 
 export interface EmLoopOptions {
   planDir: string;
+  workDir: string;
   cwd: string;
   projectId: string;
   agent: AgentBackend;
@@ -69,32 +69,11 @@ export interface EmLoopOptions {
   prdPath: string;
 }
 
-export async function runEmLoop(options: EmLoopOptions): Promise<void> {
-  const { planDir, cwd, projectId, agent, slug, projectContext, prdPath } = options;
+export async function runEmLoop(options: EmLoopOptions): Promise<EmLoopResult> {
+  const { planDir, workDir, projectId, agent, slug, projectContext, prdPath } = options;
   const progressPath = join(planDir, "progress.json");
 
   const prdContent = readFileSync(prdPath, "utf-8");
-
-  // -----------------------------------------------------------------------
-  // Git setup
-  // -----------------------------------------------------------------------
-  step("Checking git repository...");
-  try {
-    ensureGitRepo(cwd);
-  } catch (err) {
-    fail((err as Error).message);
-    return;
-  }
-  ensureCleanWorktree(cwd);
-  ok("Git repo ready");
-
-  step("Creating feature branch...");
-  const featureBranch = createFeatureBranch(cwd, slug);
-  ok(`Branch: ${featureBranch}`);
-
-  step("Setting up worktree...");
-  const workDir = setupWorktree(cwd, slug);
-  ok(`Worktree: ${workDir}`);
 
   // -----------------------------------------------------------------------
   // Phase loop
@@ -104,6 +83,9 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
   progress.status = "in_progress";
   progress.startedAt = new Date().toISOString();
   writeProgress(progressPath, progress);
+
+  let phasesCompleted = 0;
+  const totalPhases = progress.phases.length;
 
   while (!isAllComplete(progress)) {
     const phase = getCurrentPhase(progress);
@@ -174,7 +156,13 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
       console.log(`    Log: ${handle.logPath}`);
       if (result.diagnosis) console.log(`    Diagnosis: ${result.diagnosis}`);
       console.log();
-      return;
+
+      return {
+        status: "failed",
+        totalElapsedMs: Date.now() - loopStart,
+        phasesCompleted,
+        totalPhases,
+      };
     }
 
     ok("Engineer completed");
@@ -221,7 +209,13 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
       progress.status = "failed";
       writeProgress(progressPath, progress);
       console.log();
-      return;
+
+      return {
+        status: "failed",
+        totalElapsedMs: Date.now() - loopStart,
+        phasesCompleted,
+        totalPhases,
+      };
     }
 
     console.log();
@@ -231,41 +225,25 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
     markPhaseStatus(progress, phaseIdx, "completed");
     advancePhase(progress);
     writeProgress(progressPath, progress);
+    phasesCompleted++;
   }
 
   // -----------------------------------------------------------------------
-  // All phases complete
+  // All phases complete — report and return
   // -----------------------------------------------------------------------
-  const totalElapsed = formatDuration(Date.now() - loopStart);
+  const totalElapsedMs = Date.now() - loopStart;
 
   divider();
   console.log("  All phases complete!\n");
-  console.log(`  Total time: ${totalElapsed}`);
-  console.log(`  Phases completed: ${progress.phases.length}`);
-
-  // Cleanup worktree
-  step("Cleaning up worktree...");
-  try {
-    cleanupWorktree(cwd);
-    ok("Worktree removed");
-  } catch {
-    console.log("    Could not remove worktree automatically. Clean up manually.\n");
-  }
-
-  // Create PR
-  step("Creating pull request...");
-  try {
-    const pr = createPullRequest(cwd, slug, `murder new: ${slug}`);
-    if (pr.url) {
-      ok(`PR created: ${pr.url}`);
-    } else {
-      ok("Branch pushed (create PR manually)");
-    }
-  } catch (err) {
-    console.log(`    Could not create PR: ${(err as Error).message}`);
-    console.log(`    Create one manually from branch: murder/${slug}\n`);
-  }
-
+  console.log(`  Total time: ${formatDuration(totalElapsedMs)}`);
+  console.log(`  Phases completed: ${phasesCompleted}/${totalPhases}`);
   divider();
   console.log();
+
+  return {
+    status: "completed",
+    totalElapsedMs,
+    phasesCompleted,
+    totalPhases,
+  };
 }

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import sql from "../lib/db.js";
 import {
@@ -9,9 +9,23 @@ import {
 import { preflightCheck } from "../lib/preflight.js";
 import { monitorTask } from "../lib/heartbeat.js";
 import { assembleProjectContext, formatContextForPrompt } from "../lib/context.js";
-import { buildPmPrompt, buildEmPrompt } from "../lib/prompts.js";
+import {
+  buildPmPrompt,
+  buildEmPrompt,
+  buildPostMortemPmPrompt,
+} from "../lib/prompts.js";
+import type { PostMortemMeta } from "../lib/prompts.js";
 import { promptSingleSelect } from "../lib/prompt.js";
 import { runEmLoop } from "../lib/em-loop.js";
+import {
+  ensureGitRepo,
+  ensureCleanWorktree,
+  createFeatureBranch,
+  setupWorktree,
+  cleanupWorktree,
+  createPullRequest,
+  featureBranchName,
+} from "../lib/worktree.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,12 +43,24 @@ function fail(msg: string) {
   console.log(`  \u2717 ${msg}`);
 }
 
+function divider() {
+  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
+}
+
+function formatDuration(ms: number): string {
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  const remainSecs = secs % 60;
+  return `${mins}m ${remainSecs}s`;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +90,7 @@ export async function newTask() {
     return;
   }
 
+  const taskStartedAt = new Date().toISOString();
   console.log("\n  Planning new task...\n");
 
   // Step 1: Check database
@@ -144,9 +171,31 @@ export async function newTask() {
   ].filter(Boolean);
   ok(`Loaded ${contextParts.length} context files (${contextParts.join(", ")})`);
 
-  // Step 6: Create exec plan directory
+  // Step 6: Git setup — create feature branch + worktree BEFORE planning
   const slug = slugify(prompt);
-  const planDir = join(murderDir, "exec-plans", "active", slug);
+
+  step("Checking git repository...");
+  try {
+    ensureGitRepo(cwd);
+  } catch (err) {
+    fail((err as Error).message);
+    await sql.end();
+    process.exit(1);
+    return;
+  }
+  ensureCleanWorktree(cwd);
+  ok("Git repo ready");
+
+  step("Creating feature branch...");
+  const featureBranch = createFeatureBranch(cwd, slug);
+  ok(`Branch: ${featureBranch}`);
+
+  step("Setting up worktree...");
+  const workDir = setupWorktree(cwd, slug);
+  ok(`Worktree: ${workDir}`);
+
+  // Step 7: Create exec plan directory INSIDE the worktree
+  const planDir = join(workDir, ".murder", "exec-plans", "active", slug);
   mkdirSync(planDir, { recursive: true });
 
   const prdPath = join(planDir, "prd.md");
@@ -154,21 +203,22 @@ export async function newTask() {
   const progressPath = join(planDir, "progress.json");
 
   // -----------------------------------------------------------------------
-  // Phase 1: PM Agent — generate PRD
+  // Phase 1: PM Agent — generate PRD (working in the worktree)
   // -----------------------------------------------------------------------
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+  divider();
   console.log(`  PM Agent \u2014 generating PRD`);
   console.log(`  ${agent.name} will analyze your request and`);
   console.log(`  write a PRD to:`);
   console.log(`    ${prdPath}`);
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n");
+  divider();
+  console.log();
 
   const pmPrompt = buildPmPrompt(prompt, contextBlock, prdPath);
 
   const pmHandle = await dispatchAgent(
     agent,
     pmPrompt,
-    cwd,
+    workDir,
     projectId,
     "new-pm",
     { outputFormat: "stream-json" }
@@ -197,21 +247,22 @@ export async function newTask() {
   ok("PRD generated");
 
   // -----------------------------------------------------------------------
-  // Phase 2: EM Agent — generate execution plan + progress.json
+  // Phase 2: EM Agent — generate execution plan + progress.json (in worktree)
   // -----------------------------------------------------------------------
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+  divider();
   console.log(`  EM Agent \u2014 generating execution plan`);
   console.log(`  ${agent.name} will read the PRD and create:`);
   console.log(`    ${planPath}`);
   console.log(`    ${progressPath}`);
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n");
+  divider();
+  console.log();
 
   const emPrompt = buildEmPrompt(prdPath, contextBlock, planPath, progressPath, slug);
 
   const emHandle = await dispatchAgent(
     agent,
     emPrompt,
-    cwd,
+    workDir,
     projectId,
     "new-em",
     { outputFormat: "stream-json" }
@@ -251,15 +302,17 @@ export async function newTask() {
   ok("Execution plan + progress tracker generated");
 
   // -----------------------------------------------------------------------
-  // Phase 3: EM Loop — execute the plan
+  // Phase 3: EM Loop — execute the plan (engineer + review in worktree)
   // -----------------------------------------------------------------------
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+  divider();
   console.log("  Starting EM Loop \u2014 executing the plan");
-  console.log("  Engineer works in a git worktree, EM reviews each phase.");
-  console.log("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n");
+  console.log("  Engineer works in the worktree, EM reviews each phase.");
+  divider();
+  console.log();
 
-  await runEmLoop({
+  const loopResult = await runEmLoop({
     planDir,
+    workDir,
     cwd,
     projectId,
     agent,
@@ -267,6 +320,133 @@ export async function newTask() {
     projectContext: contextBlock,
     prdPath,
   });
+
+  if (loopResult.status === "failed") {
+    fail("Engineering loop failed. Skipping post-mortem.");
+    console.log(`    ${loopResult.phasesCompleted}/${loopResult.totalPhases} phases completed.`);
+    console.log(`    Elapsed: ${formatDuration(loopResult.totalElapsedMs)}\n`);
+    await sql.end();
+    process.exit(1);
+    return;
+  }
+
+  // -----------------------------------------------------------------------
+  // Phase 4: Post-mortem PM Agent — evaluate and document
+  // -----------------------------------------------------------------------
+  const taskCompletedAt = new Date().toISOString();
+
+  divider();
+  console.log("  Post-mortem PM Agent \u2014 documenting results");
+  divider();
+  console.log();
+
+  const filesOutputPath = join(planDir, "files.md");
+  const notesOutputPath = join(planDir, "notes.md");
+  const metadataOutputPath = join(planDir, "metadata.json");
+
+  const progressContent = readFileSync(progressPath, "utf-8");
+  const planContent = readFileSync(planPath, "utf-8");
+  const prdContent = readFileSync(prdPath, "utf-8");
+
+  const meta: PostMortemMeta = {
+    slug,
+    branch: featureBranchName(slug),
+    agentName: agent.name,
+    startedAt: taskStartedAt,
+    completedAt: taskCompletedAt,
+    totalElapsedMs: loopResult.totalElapsedMs,
+    phasesCompleted: loopResult.phasesCompleted,
+    totalPhases: loopResult.totalPhases,
+    status: loopResult.status,
+  };
+
+  const postMortemPrompt = buildPostMortemPmPrompt(
+    progressContent,
+    planContent,
+    prdContent,
+    contextBlock,
+    meta,
+    filesOutputPath,
+    notesOutputPath,
+    metadataOutputPath
+  );
+
+  const pmPostHandle = await dispatchAgent(
+    agent,
+    postMortemPrompt,
+    workDir,
+    projectId,
+    "post-mortem-pm",
+    { outputFormat: "stream-json" }
+  );
+
+  const pmPostResult = await monitorTask(pmPostHandle, {
+    outputTimeoutMs: 120_000,
+    checkIntervalMs: 5_000,
+    projectId,
+    outputFormat: "stream-json",
+  });
+
+  console.log();
+
+  if (!existsSync(filesOutputPath) || !existsSync(notesOutputPath) || !existsSync(metadataOutputPath)) {
+    console.log("    Post-mortem agent did not create all expected files.");
+    if (pmPostResult.diagnosis) console.log(`    Diagnosis: ${pmPostResult.diagnosis}`);
+    console.log(`    Log: ${pmPostHandle.logPath}`);
+    console.log("    Continuing with cleanup...\n");
+  } else {
+    ok("Post-mortem artifacts generated");
+  }
+
+  // -----------------------------------------------------------------------
+  // Phase 5: Cleanup intermediate files, commit, worktree teardown, PR
+  // -----------------------------------------------------------------------
+  divider();
+  console.log("  Cleaning up and finalizing");
+  divider();
+  console.log();
+
+  // Remove intermediate artifacts: notes/, plan.md, progress.json
+  const notesDir = join(planDir, "notes");
+  if (existsSync(notesDir)) {
+    rmSync(notesDir, { recursive: true, force: true });
+  }
+  if (existsSync(planPath)) {
+    rmSync(planPath);
+  }
+  if (existsSync(progressPath)) {
+    rmSync(progressPath);
+  }
+  ok("Intermediate files removed (notes/, plan.md, progress.json)");
+
+  // Cleanup worktree
+  step("Cleaning up worktree...");
+  try {
+    cleanupWorktree(cwd);
+    ok("Worktree removed");
+  } catch {
+    console.log("    Could not remove worktree automatically. Clean up manually.\n");
+  }
+
+  // Create PR
+  step("Creating pull request...");
+  try {
+    const pr = createPullRequest(cwd, slug, `murder new: ${slug}`);
+    if (pr.url) {
+      ok(`PR created: ${pr.url}`);
+    } else {
+      ok("Branch pushed (create PR manually)");
+    }
+  } catch (err) {
+    console.log(`    Could not create PR: ${(err as Error).message}`);
+    console.log(`    Create one manually from branch: murder/${slug}\n`);
+  }
+
+  divider();
+  console.log(`\n  Task complete: ${slug}`);
+  console.log(`  Total time: ${formatDuration(Date.now() - new Date(taskStartedAt).getTime())}`);
+  divider();
+  console.log();
 
   await sql.end();
 }

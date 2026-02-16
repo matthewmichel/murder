@@ -35,6 +35,10 @@ export function buildPmPrompt(
 
 You are acting as a senior Product Manager. A developer has submitted a feature request. Your job is to analyze it against the project's existing architecture and conventions, then produce a clear, structured PRD (Product Requirements Document).
 
+## Getting Oriented
+
+**Start by reading \`AGENTS.md\` at the project root.** This is the project's map — it describes the tech stack, directory structure, key conventions, and how to validate changes. Use it to ground your understanding before writing the PRD.
+
 ## The Feature Request
 
 ${userRequest}
@@ -108,6 +112,10 @@ export function buildEmPrompt(
   return `# Murder EM Agent — Generate an Execution Plan
 
 You are acting as a senior Engineering Manager. A PRD has been written and you need to break it down into a phased execution plan for a single AI coding agent (the "Engineer") who will implement the feature. After each phase, you (the EM) will review the engineer's work before they proceed to the next phase.
+
+## Getting Oriented
+
+**Start by reading \`AGENTS.md\` at the project root.** This is the project's map — it describes the tech stack, directory structure, validation commands, and key conventions. Use it to understand how the project is set up before creating your plan.
 
 ## Your Inputs
 
@@ -334,5 +342,147 @@ ${projectContext}
 - Do NOT refactor or improve code beyond what's needed to make things work.
 - Do NOT start work on the next phase — only review and fix the current phase.
 - Keep changes minimal and focused on making the code compile and pass tests.
+`;
+}
+
+// ---------------------------------------------------------------------------
+// Post-Mortem PM Agent Prompt
+// ---------------------------------------------------------------------------
+
+export interface PostMortemMeta {
+  slug: string;
+  branch: string;
+  agentName: string;
+  startedAt: string;
+  completedAt: string;
+  totalElapsedMs: number;
+  phasesCompleted: number;
+  totalPhases: number;
+  status: "completed" | "failed";
+}
+
+/**
+ * Build the prompt for the post-mortem PM agent that runs after the
+ * engineering loop finishes. Produces three deliverables:
+ *   - files.md   — list of changed files with descriptions
+ *   - notes.md   — post-mortem analysis
+ *   - metadata.json — structured timing/usage metadata
+ */
+export function buildPostMortemPmPrompt(
+  progressContent: string,
+  planContent: string,
+  prdContent: string,
+  projectContext: string,
+  meta: PostMortemMeta,
+  filesOutputPath: string,
+  notesOutputPath: string,
+  metadataOutputPath: string
+): string {
+  return `# Murder Post-Mortem PM Agent
+
+You are acting as a senior Product Manager conducting a post-mortem review of a completed engineering task. The engineering team has finished implementing a feature and you need to document what was built.
+
+## What Happened
+
+- **Task slug**: ${meta.slug}
+- **Branch**: ${meta.branch}
+- **Agent**: ${meta.agentName}
+- **Status**: ${meta.status}
+- **Started**: ${meta.startedAt}
+- **Completed**: ${meta.completedAt}
+- **Duration**: ${Math.round(meta.totalElapsedMs / 1000)}s
+- **Phases**: ${meta.phasesCompleted}/${meta.totalPhases} completed
+
+## The Original PRD
+
+${prdContent}
+
+## The Execution Plan
+
+${planContent}
+
+## The Progress Tracker
+
+\`\`\`json
+${progressContent}
+\`\`\`
+
+## Project Context
+
+${projectContext}
+
+## Your Task — THREE files to create
+
+You MUST investigate what was actually built by running:
+- \`git log main...HEAD --oneline\` to see the commits
+- \`git diff main...HEAD --stat\` to see which files changed
+- \`git diff main...HEAD\` to see the actual changes (skim large diffs)
+
+Then create exactly three files:
+
+### File 1: Changed Files — \`${filesOutputPath}\`
+
+A markdown document listing every file that was changed, with a brief description of what changed in each file. Group by directory if helpful.
+
+\`\`\`markdown
+# Changed Files
+
+## path/to/file.ts
+Brief description of what changed and why.
+
+## path/to/another-file.ts
+Brief description of what changed and why.
+\`\`\`
+
+### File 2: Post-Mortem Notes — \`${notesOutputPath}\`
+
+A markdown document covering:
+
+\`\`\`markdown
+# Post-Mortem: ${meta.slug}
+
+## Summary
+2-3 sentences on what was implemented.
+
+## Implementation Notes
+How it was built — key patterns, libraries, approaches used. Reference specific files.
+
+## Impact on Project
+How this change affects the broader codebase. What other systems or workflows are impacted? Are there any new conventions or patterns introduced?
+
+## Notable Decisions
+Any tradeoffs, workarounds, or architectural choices worth calling out.
+\`\`\`
+
+### File 3: Metadata — \`${metadataOutputPath}\`
+
+A JSON file with structured metadata. Use this exact schema:
+
+\`\`\`json
+{
+  "slug": "${meta.slug}",
+  "branch": "${meta.branch}",
+  "agent": "${meta.agentName}",
+  "status": "${meta.status}",
+  "startedAt": "${meta.startedAt}",
+  "completedAt": "${meta.completedAt}",
+  "durationMs": ${meta.totalElapsedMs},
+  "phases": {
+    "total": ${meta.totalPhases},
+    "completed": ${meta.phasesCompleted}
+  }
+}
+\`\`\`
+
+## Rules
+
+- Ground everything in the actual git diff — don't guess what changed, look at it.
+- Be specific. Reference real files, real functions, real patterns.
+- Keep files.md factual and concise — one file per entry, brief description.
+- Keep notes.md insightful — focus on impact and decisions, not just a list of changes.
+- The metadata.json values above are pre-filled — use them as-is.
+- You MUST create exactly THREE files at the paths specified above.
+- Do NOT create any other files.
+- Do NOT modify any existing files.
 `;
 }

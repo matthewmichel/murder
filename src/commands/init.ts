@@ -291,24 +291,40 @@ export async function init() {
   mkdirSync(join(murderDir, "logs"), { recursive: true });
   ok(".murder/ directory created");
 
-  // Step 7b: Ensure .murder/ is gitignored
+  // Step 7b: Ensure .murder/worktrees/ and .murder/logs/ are gitignored
   step("Checking .gitignore...");
   const gitignorePath = join(cwd, ".gitignore");
-  const murderIgnoreEntry = ".murder/";
+  const murderIgnoreEntries = [".murder/worktrees/", ".murder/logs/"];
 
   if (existsSync(gitignorePath)) {
-    const content = readFileSync(gitignorePath, "utf-8");
+    let content = readFileSync(gitignorePath, "utf-8");
     const lines = content.split("\n").map((l) => l.trim());
-    if (!lines.includes(".murder") && !lines.includes(".murder/")) {
+
+    // If the old blanket .murder/ ignore exists, replace it with the specific entries
+    if (lines.includes(".murder/") || lines.includes(".murder")) {
+      content = content
+        .split("\n")
+        .filter((l) => l.trim() !== ".murder/" && l.trim() !== ".murder")
+        .join("\n");
+    }
+
+    const added: string[] = [];
+    for (const entry of murderIgnoreEntries) {
+      if (!lines.includes(entry)) {
+        added.push(entry);
+      }
+    }
+
+    if (added.length > 0) {
       const separator = content.endsWith("\n") ? "" : "\n";
-      writeFileSync(gitignorePath, `${content}${separator}${murderIgnoreEntry}\n`);
-      ok(".murder/ added to .gitignore");
+      writeFileSync(gitignorePath, `${content}${separator}${added.join("\n")}\n`);
+      ok(`Added to .gitignore: ${added.join(", ")}`);
     } else {
-      ok(".murder/ already in .gitignore");
+      ok(".murder ignore entries already in .gitignore");
     }
   } else {
-    writeFileSync(gitignorePath, `${murderIgnoreEntry}\n`);
-    ok(".gitignore created with .murder/");
+    writeFileSync(gitignorePath, `${murderIgnoreEntries.join("\n")}\n`);
+    ok(`.gitignore created with ${murderIgnoreEntries.join(", ")}`);
   }
 
   // Step 8: Build prompt and dispatch to the agent
