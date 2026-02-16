@@ -245,13 +245,39 @@ export async function getProjectById(projectId: string): Promise<{ id: string; r
 // Slug generation for job runs
 // ---------------------------------------------------------------------------
 
-export function slugForRun(jobSlug: string): string {
+function generateRunSlug(jobSlug: string): string {
   const now = new Date();
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
   const hex = randomBytes(2).toString("hex");
   return `${jobSlug}-${yyyy}-${mm}-${dd}-${hex}`;
+}
+
+/**
+ * Generate a unique slug for a job run.
+ * Checks the job_runs table for existing slug_used values and retries
+ * with a different random hex suffix if there's a collision.
+ * Gives up after 10 attempts (extremely unlikely to collide that many times).
+ */
+export async function slugForRun(jobSlug: string): Promise<string> {
+  const maxAttempts = 10;
+  for (let i = 0; i < maxAttempts; i++) {
+    const candidate = generateRunSlug(jobSlug);
+    const existing = await sql`
+      SELECT id FROM job_runs WHERE slug_used = ${candidate} LIMIT 1
+    `;
+    if (existing.length === 0) {
+      return candidate;
+    }
+  }
+  // Fallback: use 4 bytes of randomness for extra uniqueness
+  const fallbackHex = randomBytes(4).toString("hex");
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${jobSlug}-${yyyy}-${mm}-${dd}-${fallbackHex}`;
 }
 
 // ---------------------------------------------------------------------------

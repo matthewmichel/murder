@@ -233,7 +233,19 @@ export async function action({ request }: { request: Request }) {
     if (!projectId) return { error: "Project is required." };
     if (!prompt) return { error: "Prompt is required." };
     if (!schedule) return { error: "Schedule is required." };
-    if (!isValidCron(schedule)) return { error: "Invalid CRON expression. Use 5-field format: minute hour day-of-month month day-of-week" };
+    {
+      const cronParts = schedule.split(/\s+/);
+      if (cronParts.length !== 5) {
+        return {
+          error: `CRON expression must have exactly 5 fields (minute hour day-of-month month day-of-week), but got ${cronParts.length} field(s).`,
+        };
+      }
+      if (!isValidCron(schedule)) {
+        return {
+          error: "Invalid CRON expression. Each field must be *, a number in range, */N step, a range (e.g. 1-5), or comma-separated values. Format: minute(0-59) hour(0-23) day(1-31) month(1-12) weekday(0-7).",
+        };
+      }
+    }
 
     const slug = slugify(name);
     if (!slug) return { error: "Name must contain at least one alphanumeric character." };
@@ -260,7 +272,19 @@ export async function action({ request }: { request: Request }) {
     if (!name) return { error: "Name is required." };
     if (!prompt) return { error: "Prompt is required." };
     if (!schedule) return { error: "Schedule is required." };
-    if (!isValidCron(schedule)) return { error: "Invalid CRON expression." };
+    {
+      const cronParts = schedule.split(/\s+/);
+      if (cronParts.length !== 5) {
+        return {
+          error: `CRON expression must have exactly 5 fields (minute hour day-of-month month day-of-week), but got ${cronParts.length} field(s).`,
+        };
+      }
+      if (!isValidCron(schedule)) {
+        return {
+          error: "Invalid CRON expression. Each field must be *, a number in range, */N step, a range (e.g. 1-5), or comma-separated values. Format: minute(0-59) hour(0-23) day(1-31) month(1-12) weekday(0-7).",
+        };
+      }
+    }
 
     await sql`
       UPDATE jobs

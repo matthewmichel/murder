@@ -77,6 +77,12 @@ async function cleanupOnStartup(): Promise<void> {
     log(`Marked stuck running run ${run.id} as failed`);
   }
 
+  // Check for recent pending runs that will be picked up on the first tick
+  const recentPending = await getPendingRuns();
+  if (recentPending.length > 0) {
+    log(`Found ${recentPending.length} recent pending run(s) — will execute on first tick`);
+  }
+
   if (staleRuns.length > 0 || stuckRuns.length > 0) {
     log(`Startup cleanup: ${staleRuns.length} stale, ${stuckRuns.length} stuck runs cleaned up`);
   }
@@ -184,21 +190,21 @@ async function executeRun(pendingRun: PendingRunWithJob): Promise<void> {
   });
 
   // Generate run slug
-  const runSlug = slugForRun(job.slug);
+  const runSlug = await slugForRun(job.slug);
   await updateJobRun(pendingRun.id, { slug_used: runSlug });
 
   log(`Executing run ${pendingRun.id} for job "${job.name}" with slug "${runSlug}"`);
 
-  // Validate project exists
+  // Validate project exists in the database (handles project deletion)
   const project = await getProjectById(job.project_id);
   if (!project) {
     await updateJobRun(pendingRun.id, {
       status: "failed",
-      error_message: `Project ${job.project_id} not found in database`,
+      error_message: `Project not found — the project (${job.project_id}) may have been deleted. Disable or delete this job to stop future failures.`,
       completed_at: new Date().toISOString(),
     });
     await updateJob(job.id, { last_run_at: new Date().toISOString() });
-    logError(`Run ${pendingRun.id} failed: project ${job.project_id} not found`);
+    logError(`Run ${pendingRun.id} failed: project ${job.project_id} no longer exists (deleted?). Job: "${job.name}"`);
     return;
   }
 
@@ -206,11 +212,11 @@ async function executeRun(pendingRun: PendingRunWithJob): Promise<void> {
   if (!existsSync(project.root_path)) {
     await updateJobRun(pendingRun.id, {
       status: "failed",
-      error_message: `Project root path does not exist: ${project.root_path}`,
+      error_message: `Project directory not found at "${project.root_path}" — the project may have been moved or deleted from disk.`,
       completed_at: new Date().toISOString(),
     });
     await updateJob(job.id, { last_run_at: new Date().toISOString() });
-    logError(`Run ${pendingRun.id} failed: project root path does not exist: ${project.root_path}`);
+    logError(`Run ${pendingRun.id} failed: project "${project.name}" root path does not exist: ${project.root_path}`);
     return;
   }
 
