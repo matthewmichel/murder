@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Known stuck patterns — cheap first pass before calling the AI.
+// Known stuck patterns — regex-based detection for stuck agents.
 // Each pattern maps a regex to a diagnosis and recommended action.
 // ---------------------------------------------------------------------------
 
@@ -46,6 +46,32 @@ const SHARED_PATTERNS: StuckPattern[] = [
     diagnosis: "API quota or billing issue with the provider.",
     action: "kill",
   },
+  // Interactive input prompts — agent is waiting for user input it can't provide
+  {
+    regex: /press enter|press any key|\[y\/n\]|\(y\/n\)|enter your|waiting for input|are you sure\?|confirm\?/i,
+    diagnosis:
+      "Agent is waiting for interactive user input it cannot provide.",
+    action: "kill",
+  },
+  // HTTP server errors
+  {
+    regex: /500 internal server error|502 bad gateway|503 service unavailable/i,
+    diagnosis: "Server returned an HTTP error. The API may be down.",
+    action: "retry",
+  },
+  // Timeout and stall indicators
+  {
+    regex: /request timeout|timed?\s*out|ETIMEOUT|deadline exceeded|context deadline/i,
+    diagnosis: "Request timed out. The API may be slow or unresponsive.",
+    action: "retry",
+  },
+  // API authentication errors
+  {
+    regex: /\b401\b.*unauthorized|unauthorized.*\b401\b|\binvalid.?api.?key\b|api.?key.?expired|authentication failed|invalid_api_key/i,
+    diagnosis:
+      "API authentication error. Check your API key configuration.",
+    action: "kill",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -64,6 +90,13 @@ const CURSOR_PATTERNS: StuckPattern[] = [
     diagnosis:
       "The configured model is not available. Update the preferred model in agent settings (murder start or web UI).",
     action: "kill",
+  },
+  // Cursor-specific stall: repeated tool_call JSON events with no meaningful progress
+  {
+    regex: /("tool_call".*\n?){3,}/i,
+    diagnosis:
+      "Cursor CLI appears stalled — repeated tool_call events with no progress.",
+    action: "escalate",
   },
 ];
 
@@ -90,6 +123,26 @@ export interface PatternNoMatch {
 }
 
 export type PatternResult = PatternMatch | PatternNoMatch;
+
+/**
+ * Detect when the last N lines of output are identical, indicating an
+ * infinite loop or repeated error. Returns true if the threshold is met.
+ */
+export function detectRepeatedOutput(
+  output: string,
+  threshold: number = 5
+): boolean {
+  const lines = output
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  if (lines.length < threshold) return false;
+
+  const tail = lines.slice(-threshold);
+  const first = tail[0];
+  return tail.every((line) => line === first);
+}
 
 /**
  * Scan the last chunk of agent output for known stuck patterns.
