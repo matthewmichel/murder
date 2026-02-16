@@ -10,6 +10,9 @@ export interface ProjectContext {
   coreBeliefs: string | null;
   config: string | null;
   agentsMd: string | null;
+  pmKnowledge: string | null;
+  emKnowledge: string | null;
+  futureDirection: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,6 +44,9 @@ export function assembleProjectContext(cwd: string): ProjectContext {
     coreBeliefs: readIfExists(join(cwd, ".murder", "core-beliefs.md")),
     config: readIfExists(join(cwd, ".murder", "config.ts")),
     agentsMd: readIfExists(join(cwd, "AGENTS.md")),
+    pmKnowledge: readIfExists(join(cwd, ".murder", "PM.md")),
+    emKnowledge: readIfExists(join(cwd, ".murder", "EM.md")),
+    futureDirection: readIfExists(join(cwd, ".murder", "FUTURE.md")),
   };
 }
 
@@ -65,6 +71,18 @@ export function formatContextForPrompt(ctx: ProjectContext): string {
 
   if (ctx.config) {
     sections.push(`## Project Config (.murder/config.ts)\n\n\`\`\`typescript\n${ctx.config}\n\`\`\``);
+  }
+
+  if (ctx.pmKnowledge) {
+    sections.push(`## Product Knowledge (PM.md)\n\n${ctx.pmKnowledge}`);
+  }
+
+  if (ctx.emKnowledge) {
+    sections.push(`## Engineering Knowledge (EM.md)\n\n${ctx.emKnowledge}`);
+  }
+
+  if (ctx.futureDirection) {
+    sections.push(`## Future Direction (FUTURE.md)\n\n${ctx.futureDirection}`);
   }
 
   if (sections.length === 0) {
