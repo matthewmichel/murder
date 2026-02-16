@@ -108,7 +108,13 @@ export function preflightCheck(
   agent: AgentBackend,
   cwd: string
 ): PreflightResult {
-  const args = ["-p", "--force", '"respond with OK"'];
+  const args: string[] = [];
+
+  if (agent.preferred_model && agent.preferred_model !== "auto") {
+    args.push("--model", agent.preferred_model);
+  }
+
+  args.push("-p", "--force", '"respond with OK"');
   const result = runSmoke(agent.cli_command, args, cwd);
 
   if (result.ok) {
