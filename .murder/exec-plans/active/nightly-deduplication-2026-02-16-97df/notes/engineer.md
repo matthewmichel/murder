@@ -15,3 +15,19 @@
 - Unicode characters in source files (●, ✓, ✗, ─, etc.) cause issues with string replacement tools — had to use full file writes instead of targeted replacements
 - `web/app/routes/jobs.tsx` has its own `slugify()` — intentionally left separate since it's client-side React code that can't import from `src/lib/`
 - `init.ts` uses `slugify` in `ensureProjectRegistered()` — now gets the 60-char truncation version, which is the safer default for branch/directory names
+
+# Engineer Notes — Phase 2
+
+## What was done
+- Added `agent?: AgentBackend` and `prTitlePrefix?: string` to `RunNewTaskOptions` in `run-new-task.ts`
+- `runNewTaskProgrammatic()` now accepts a pre-resolved agent directly (skips slug lookup when provided) and uses configurable PR title prefix (defaults to "murder job")
+- Refactored `new.ts` from ~558 lines to ~305 lines — removed all duplicated pipeline logic (PM dispatch, EM dispatch, EM loop, post-mortem, file cleanup, worktree setup/teardown, PR creation)
+- `new.ts` now does interactive setup (arg parsing, DB check, project check, agent selection with interactive prompt, preflight, context display, slug generation) then delegates to `runNewTaskProgrammatic()` and handles the result
+- PR title prefix is "murder new" when called from CLI, "murder job" (default) when called from job executor
+
+## Decisions
+- Chose the "call and handle result" approach over `onProgress` callback — cleaner because `new.ts` does its own interactive setup with console output, then the pipeline runs silently via `runNewTaskProgrammatic()`, and `new.ts` handles success/failure output
+- `runNewTaskProgrammatic()` re-runs DB check, project init check, and preflight even when called from `new.ts` — these are redundant but harmless and keep the programmatic API self-contained
+- `new.ts` still calls `formatContextForPrompt(ctx)` in step 5 (for the context parts display) even though `runNewTaskProgrammatic()` will call it again internally — the return value isn't needed in `new.ts`, just the `ctx` object for listing knowledge files
+- Kept `extractNameFromStreamJson`, `runQuickAgent`, and `generateSlugFromAgent` in `new.ts` — these are interactive CLI slug generation helpers not needed by the programmatic pipeline (which receives the slug as input)
+- `taskStartedAt` changed from ISO string to `Date.now()` in `new.ts` since it's only used for duration calculation

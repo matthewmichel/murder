@@ -34,6 +34,10 @@ export interface RunNewTaskOptions {
   projectRootPath: string;
   slug: string;
   agentSlug?: string;
+  /** Pass a resolved agent directly (skips agentSlug lookup) */
+  agent?: AgentBackend;
+  /** Prefix for the PR title — defaults to "murder job" */
+  prTitlePrefix?: string;
 }
 
 export interface RunNewTaskResult {
@@ -59,6 +63,7 @@ export async function runNewTaskProgrammatic(
   const { prompt, projectId, projectRootPath, slug } = options;
   const cwd = projectRootPath;
   const taskStartedAt = new Date().toISOString();
+  const prTitlePrefix = options.prTitlePrefix ?? "murder job";
 
   // Step 1: Verify database connection
   try {
@@ -74,15 +79,15 @@ export async function runNewTaskProgrammatic(
   }
 
   // Step 3: Get agent
-  let agent: AgentBackend | null = null;
+  let agent: AgentBackend | null = options.agent ?? null;
 
-  if (options.agentSlug) {
+  if (!agent && options.agentSlug) {
     const agents = await getAvailableAgents();
     agent = agents.find((a) => a.slug === options.agentSlug) ?? null;
     if (!agent) {
       throw new Error(`Agent "${options.agentSlug}" not found or not available.`);
     }
-  } else {
+  } else if (!agent) {
     agent = await getDefaultAgent();
     if (!agent) {
       const agents = await getAvailableAgents();
@@ -284,7 +289,7 @@ export async function runNewTaskProgrammatic(
     // Create PR
     let prUrl: string | null = null;
     try {
-      const pr = createPullRequest(cwd, slug, `murder job: ${slug}`);
+      const pr = createPullRequest(cwd, slug, `${prTitlePrefix}: ${slug}`);
       prUrl = pr.url;
     } catch {
       // PR creation failed — non-critical
