@@ -66,8 +66,8 @@ export class PGVectorStore {
       FROM information_schema.tables
       WHERE table_schema = 'public'
     `;
-    const tableNames = tables.map(
-      (r: { table_name: string }) => r.table_name
+    const tableNames = (tables as unknown as Array<{ table_name: string }>).map(
+      (r) => r.table_name
     );
 
     if (!tableNames.includes(this.collectionName)) {

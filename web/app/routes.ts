@@ -6,4 +6,5 @@ export default [
   route("configs", "routes/configs.tsx"),
   route("agents", "routes/agents.tsx"),
   route("projects", "routes/projects.tsx"),
+  route("jobs", "routes/jobs.tsx"),
 ] satisfies RouteConfig;
