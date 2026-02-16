@@ -14,6 +14,7 @@ const navItems = [
   { to: "/configs", label: "Models", icon: "⚙" },
   { to: "/agents", label: "Agents", icon: "▶" },
   { to: "/projects", label: "Projects", icon: "◫" },
+  { to: "/jobs", label: "Jobs", icon: "⏱" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
