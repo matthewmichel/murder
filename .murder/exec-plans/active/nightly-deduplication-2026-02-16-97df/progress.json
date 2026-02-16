@@ -1,0 +1,181 @@
+{
+  "slug": "nightly-deduplication-2026-02-16-97df",
+  "status": "in_progress",
+  "currentPhase": 0,
+  "startedAt": "2026-02-16T22:19:03.000Z",
+  "completedAt": null,
+  "phases": [
+    {
+      "number": 1,
+      "name": "Extract shared helpers into `src/lib/cli-utils.ts`",
+      "status": "in_progress",
+      "engineer": {
+        "status": "in_progress",
+        "taskId": "48670e48-028d-482c-ab8c-99f7aaeeac0b",
+        "sections": [
+          {
+            "name": "Create the shared module",
+            "tasks": [
+              {
+                "description": "Create `src/lib/cli-utils.ts` with section separators (Types, Helpers, Public API) following the project's file organization conventions",
+                "completed": false
+              },
+              {
+                "description": "Export `step(msg: string): void` — prints `  ● <msg>`",
+                "completed": false
+              },
+              {
+                "description": "Export `ok(msg: string): void` — prints `  ✓ <msg>\\n`",
+                "completed": false
+              },
+              {
+                "description": "Export `fail(msg: string): void` — prints `  ✗ <msg>`",
+                "completed": false
+              },
+              {
+                "description": "Export `divider(): void` — prints a line of 41 `─` characters with 2-space indent",
+                "completed": false
+              },
+              {
+                "description": "Export `formatDuration(ms: number): string` — formats milliseconds as `Xs` or `Xm Ys`",
+                "completed": false
+              },
+              {
+                "description": "Export `slugify(text: string): string` — the canonical version from `src/commands/new.ts` that truncates to 60 characters",
+                "completed": false
+              },
+              {
+                "description": "Export `getProjectId(cwd: string): Promise<string | null>` — queries `projects` table by `root_path`, imports `sql` from `./db.js`",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Update consumers to import from the shared module",
+            "tasks": [
+              {
+                "description": "In `src/commands/new.ts`: remove local `step()`, `ok()`, `fail()`, `divider()`, `slugify()`, `formatDuration()`, `getProjectId()` definitions and import them from `../lib/cli-utils.js`",
+                "completed": false
+              },
+              {
+                "description": "In `src/commands/learn.ts`: remove local `step()`, `ok()`, `fail()`, `divider()`, `formatDuration()`, `getProjectId()` definitions and import them from `../lib/cli-utils.js`",
+                "completed": false
+              },
+              {
+                "description": "In `src/commands/init.ts`: remove local `step()`, `ok()`, `fail()`, `slugify()` definitions and import them from `../lib/cli-utils.js`",
+                "completed": false
+              },
+              {
+                "description": "In `src/commands/start.ts`: remove local `step()`, `ok()`, `fail()` definitions (at the bottom of the file, lines 320-330) and import them from `../lib/cli-utils.js`",
+                "completed": false
+              },
+              {
+                "description": "In `src/commands/project.ts`: remove local `slugify()` definition and import it from `../lib/cli-utils.js`",
+                "completed": false
+              },
+              {
+                "description": "In `src/lib/em-loop.ts`: remove local `ok()`, `fail()`, `divider()`, `formatDuration()` definitions and import them from `./cli-utils.js`",
+                "completed": false
+              },
+              {
+                "description": "In `src/lib/heartbeat.ts`: remove local `formatDuration()` definition and import it from `./cli-utils.js`",
+                "completed": false
+              },
+              {
+                "description": "In `src/lib/run-new-task.ts`: remove local `formatDuration()` definition and import it from `./cli-utils.js`",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Validate",
+            "tasks": [
+              {
+                "description": "Run `npx tsc --noEmit` and fix any type errors",
+                "completed": false
+              },
+              {
+                "description": "Verify no circular imports exist (cli-utils.ts → db.ts, and no reverse dependency)",
+                "completed": false
+              }
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "pending",
+        "taskId": null
+      }
+    },
+    {
+      "number": 2,
+      "name": "Refactor `new.ts` to delegate pipeline to `run-new-task.ts`",
+      "status": "pending",
+      "engineer": {
+        "status": "pending",
+        "taskId": null,
+        "sections": [
+          {
+            "name": "Adapt `runNewTaskProgrammatic()` for reuse by the interactive CLI",
+            "tasks": [
+              {
+                "description": "In `src/lib/run-new-task.ts`, add an optional `onProgress` callback to `RunNewTaskOptions` (e.g., `onProgress?: (event: string, detail?: string) => void`) so the interactive CLI can receive progress updates for its console output — OR alternatively, have `new.ts` call `runNewTaskProgrammatic()` and handle output before/after the call. Evaluate which approach is cleaner and implement accordingly.",
+                "completed": false
+              },
+              {
+                "description": "Ensure `runNewTaskProgrammatic()` accepts the agent directly (add optional `agent?: AgentBackend` to `RunNewTaskOptions`) so the interactive CLI can pass its user-selected agent instead of relying on `agentSlug` lookup",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Refactor `src/commands/new.ts` into a thin interactive wrapper",
+            "tasks": [
+              {
+                "description": "Keep in `new.ts`: argument parsing (`process.argv`), prompt validation, database connection check, project initialization check, agent selection with interactive `promptSingleSelect` fallback, pre-flight check, context assembly display, slug generation via `generateSlugFromAgent()`, and all user-facing console output (dividers, step/ok/fail messages, timing display)",
+                "completed": false
+              },
+              {
+                "description": "Remove from `new.ts`: the duplicated pipeline logic (PM agent dispatch, EM agent dispatch, EM loop invocation, post-mortem agent dispatch, file cleanup, worktree setup/teardown, PR creation) — all of which is already in `runNewTaskProgrammatic()`",
+                "completed": false
+              },
+              {
+                "description": "Have `new.ts` call `runNewTaskProgrammatic()` with the resolved parameters (prompt, projectId, projectRootPath, slug, agent) and handle the result with appropriate CLI output",
+                "completed": false
+              },
+              {
+                "description": "Ensure `new.ts` still calls `process.exit()` on failure and `sql.end()` before exiting — `runNewTaskProgrammatic()` does NOT call these",
+                "completed": false
+              },
+              {
+                "description": "Preserve the PR description prefix as `murder new: <slug>` (vs `murder job: <slug>` used by the job executor) — if `runNewTaskProgrammatic()` hardcodes the PR title, add a `prTitlePrefix` option or similar",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Validate",
+            "tasks": [
+              {
+                "description": "Run `npx tsc --noEmit` and fix any type errors",
+                "completed": false
+              },
+              {
+                "description": "Verify that `web/app/routes/jobs.tsx` still has its own local `slugify()` (it should NOT import from `src/lib/` — it's client-side React code)",
+                "completed": false
+              },
+              {
+                "description": "Confirm no new files were created other than `src/lib/cli-utils.ts`",
+                "completed": false
+              }
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "pending",
+        "taskId": null
+      }
+    }
+  ]
+}

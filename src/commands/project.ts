@@ -1,13 +1,7 @@
 import path from "node:path";
 import sql from "../lib/db.js";
 import { promptText } from "../lib/prompt.js";
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+import { slugify } from "../lib/cli-utils.js";
 
 export async function project() {
   const cwd = process.cwd();
@@ -19,7 +13,7 @@ export async function project() {
   try {
     rows = await sql`SELECT * FROM projects WHERE root_path = ${cwd} LIMIT 1`;
   } catch {
-    console.log("  ✗ Could not connect to the database.");
+    console.log("  \u2717 Could not connect to the database.");
     console.log("    Make sure murder is running (murder start).\n");
     process.exit(1);
     return;
@@ -67,7 +61,7 @@ export async function project() {
 
   const name = await promptText("Name:", dirName);
   if (!name) {
-    console.log("\n  ✗ No name entered. Aborting.\n");
+    console.log("\n  \u2717 No name entered. Aborting.\n");
     await sql.end();
     process.exit(1);
     return;
@@ -76,7 +70,7 @@ export async function project() {
   const defaultSlug = slugify(name);
   const slug = await promptText("Slug:", defaultSlug);
   if (!slug) {
-    console.log("\n  ✗ No slug entered. Aborting.\n");
+    console.log("\n  \u2717 No slug entered. Aborting.\n");
     await sql.end();
     process.exit(1);
     return;
@@ -85,7 +79,7 @@ export async function project() {
   // Validate slug uniqueness
   const existing = await sql`SELECT id FROM projects WHERE slug = ${slug}`;
   if (existing.length > 0) {
-    console.log(`\n  ✗ A project with slug "${slug}" already exists. Aborting.\n`);
+    console.log(`\n  \u2717 A project with slug "${slug}" already exists. Aborting.\n`);
     await sql.end();
     process.exit(1);
     return;
@@ -99,7 +93,7 @@ export async function project() {
       VALUES (${name}, ${slug}, ${description}, ${cwd})
     `;
   } catch (err) {
-    console.log("\n  ✗ Failed to create project.");
+    console.log("\n  \u2717 Failed to create project.");
     if (err instanceof Error) console.log(`    ${err.message}`);
     console.log();
     await sql.end();
@@ -107,7 +101,7 @@ export async function project() {
     return;
   }
 
-  console.log(`\n  ✓ Project "${name}" registered`);
+  console.log(`\n  \u2713 Project "${name}" registered`);
   console.log(`    ${cwd}\n`);
 
   await sql.end();
