@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "fs";
+import { readFileSync } from "fs";
 import { join } from "path";
 import type { AgentBackend } from "./dispatch.js";
 import { dispatchAgent } from "./dispatch.js";
@@ -17,12 +17,9 @@ import {
   ensureGitRepo,
   ensureCleanWorktree,
   createFeatureBranch,
-  setupWorktrees,
-  setupPhaseBranches,
-  mergePhaseBranches,
-  cleanupWorktrees,
+  setupWorktree,
+  cleanupWorktree,
   createPullRequest,
-  worktreeDir,
 } from "./worktree.js";
 import {
   buildEngineerPrompt,
@@ -59,7 +56,7 @@ function formatDuration(ms: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Main EM Loop
+// Main EM Loop — single engineer, phased execution with manager review
 // ---------------------------------------------------------------------------
 
 export interface EmLoopOptions {
@@ -76,7 +73,6 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
   const { planDir, cwd, projectId, agent, slug, projectContext, prdPath } = options;
   const progressPath = join(planDir, "progress.json");
 
-  // Read PRD content for engineer prompts
   const prdContent = readFileSync(prdPath, "utf-8");
 
   // -----------------------------------------------------------------------
@@ -96,9 +92,9 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
   const featureBranch = createFeatureBranch(cwd, slug);
   ok(`Branch: ${featureBranch}`);
 
-  step("Setting up worktrees...");
-  const worktrees = setupWorktrees(cwd, slug);
-  ok(`Eng A: ${worktrees.engA}\n    Eng B: ${worktrees.engB}`);
+  step("Setting up worktree...");
+  const workDir = setupWorktree(cwd, slug);
+  ok(`Worktree: ${workDir}`);
 
   // -----------------------------------------------------------------------
   // Phase loop
@@ -118,112 +114,70 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
 
     divider();
     console.log(`  Phase ${phaseNum}: ${phase.name}`);
-    console.log(`  Dispatching Engineer A + Engineer B in parallel`);
+    console.log(`  Dispatching Engineer`);
     divider();
     console.log();
-
-    // Setup branches for this phase
-    if (phaseNum > 1) {
-      step(`Setting up branches for Phase ${phaseNum}...`);
-      setupPhaseBranches(cwd, slug, phaseNum);
-      ok("Phase branches ready");
-    }
 
     // Mark phase as in progress
     markPhaseStatus(progress, phaseIdx, "in_progress");
     writeProgress(progressPath, progress);
 
-    // Build prompts (pass each engineer's notes file path so they can read/write directly)
-    const notesPathA = engineerNotesPath(planDir, "A");
-    const notesPathB = engineerNotesPath(planDir, "B");
-    const promptA = buildEngineerPrompt("A", phase, prdContent, projectContext, notesPathA);
-    const promptB = buildEngineerPrompt("B", phase, prdContent, projectContext, notesPathB);
+    // Build prompt
+    const notesPath = engineerNotesPath(planDir);
+    const prompt = buildEngineerPrompt(phase, prdContent, projectContext, notesPath);
 
-    // Dispatch both engineers in parallel
-    markEngineerStatus(progress, phaseIdx, "A", "in_progress");
-    markEngineerStatus(progress, phaseIdx, "B", "in_progress");
+    // Dispatch engineer
+    markEngineerStatus(progress, phaseIdx, "in_progress");
     writeProgress(progressPath, progress);
 
-    const engADir = join(worktreeDir(cwd), "eng-a");
-    const engBDir = join(worktreeDir(cwd), "eng-b");
+    const handle = await dispatchAgent(
+      agent,
+      prompt,
+      workDir,
+      projectId,
+      `eng-phase-${phaseNum}`,
+      { outputFormat: "stream-json" }
+    );
 
-    const [handleA, handleB] = await Promise.all([
-      dispatchAgent(agent, promptA, engADir, projectId, `eng-a-phase-${phaseNum}`, { outputFormat: "stream-json", label: "Eng A" }),
-      dispatchAgent(agent, promptB, engBDir, projectId, `eng-b-phase-${phaseNum}`, { outputFormat: "stream-json", label: "Eng B" }),
-    ]);
-
-    markEngineerStatus(progress, phaseIdx, "A", "in_progress", handleA.taskId);
-    markEngineerStatus(progress, phaseIdx, "B", "in_progress", handleB.taskId);
+    markEngineerStatus(progress, phaseIdx, "in_progress", handle.taskId);
     writeProgress(progressPath, progress);
 
-    console.log(`    Eng A PID: ${handleA.pid}  Log: ${handleA.logPath}`);
-    console.log(`    Eng B PID: ${handleB.pid}  Log: ${handleB.logPath}`);
+    console.log(`    Engineer PID: ${handle.pid}  Log: ${handle.logPath}`);
     console.log();
 
-    // Monitor both in parallel — stream-json events display interleaved with labels
+    // Monitor
     const phaseStart = Date.now();
 
-    const [resultA, resultB] = await Promise.all([
-      monitorTask(handleA, {
-        outputTimeoutMs: 300_000,
-        checkIntervalMs: 10_000,
-        projectId,
-        outputFormat: "stream-json",
-      }),
-      monitorTask(handleB, {
-        outputTimeoutMs: 300_000,
-        checkIntervalMs: 10_000,
-        projectId,
-        outputFormat: "stream-json",
-      }),
-    ]);
+    const result = await monitorTask(handle, {
+      outputTimeoutMs: 300_000,
+      checkIntervalMs: 10_000,
+      projectId,
+      outputFormat: "stream-json",
+    });
 
     const phaseElapsed = formatDuration(Date.now() - phaseStart);
 
-    // Update engineer statuses
-    const engAStatus = resultA.status === "completed" ? "completed" as const : "failed" as const;
-    const engBStatus = resultB.status === "completed" ? "completed" as const : "failed" as const;
-
-    markEngineerStatus(progress, phaseIdx, "A", engAStatus);
-    markEngineerStatus(progress, phaseIdx, "B", engBStatus);
+    const engStatus = result.status === "completed" ? "completed" as const : "failed" as const;
+    markEngineerStatus(progress, phaseIdx, engStatus);
     writeProgress(progressPath, progress);
 
-    console.log(`    Eng A: ${engAStatus} (exit ${resultA.exitCode})`);
-    console.log(`    Eng B: ${engBStatus} (exit ${resultB.exitCode})`);
+    console.log(`    Engineer: ${engStatus} (exit ${result.exitCode})`);
     console.log(`    Phase ${phaseNum} engineering: ${phaseElapsed}\n`);
 
-    // If either failed, stop
-    if (engAStatus === "failed" || engBStatus === "failed") {
+    // If failed, stop
+    if (engStatus === "failed") {
       markPhaseStatus(progress, phaseIdx, "failed");
       progress.status = "failed";
       writeProgress(progressPath, progress);
 
       fail(`Phase ${phaseNum} failed.`);
-      if (engAStatus === "failed") {
-        console.log(`    Eng A log: ${handleA.logPath}`);
-        if (resultA.diagnosis) console.log(`    Diagnosis: ${resultA.diagnosis}`);
-      }
-      if (engBStatus === "failed") {
-        console.log(`    Eng B log: ${handleB.logPath}`);
-        if (resultB.diagnosis) console.log(`    Diagnosis: ${resultB.diagnosis}`);
-      }
+      console.log(`    Log: ${handle.logPath}`);
+      if (result.diagnosis) console.log(`    Diagnosis: ${result.diagnosis}`);
       console.log();
       return;
     }
 
-    ok("Both engineers completed");
-
-    // -------------------------------------------------------------------
-    // Merge phase branches into feature branch
-    // -------------------------------------------------------------------
-    step(`Merging Phase ${phaseNum} branches into feature branch...`);
-    const mergeResult = mergePhaseBranches(cwd, slug, phaseNum);
-
-    if (mergeResult.clean) {
-      ok("Merge clean");
-    } else {
-      console.log(`    Conflicts in: ${mergeResult.conflicts.join(", ")}\n`);
-    }
+    ok("Engineer completed");
 
     // -------------------------------------------------------------------
     // EM Review Agent
@@ -236,19 +190,12 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
     markReviewStatus(progress, phaseIdx, "in_progress");
     writeProgress(progressPath, progress);
 
-    const reviewPrompt = buildEmReviewPrompt(
-      phase,
-      slug,
-      phaseNum,
-      projectContext,
-      !mergeResult.clean,
-      mergeResult.conflicts
-    );
+    const reviewPrompt = buildEmReviewPrompt(phase, slug, phaseNum, projectContext);
 
     const reviewHandle = await dispatchAgent(
       agent,
       reviewPrompt,
-      cwd,
+      workDir,
       projectId,
       `em-review-phase-${phaseNum}`,
       { outputFormat: "stream-json" }
@@ -296,13 +243,13 @@ export async function runEmLoop(options: EmLoopOptions): Promise<void> {
   console.log(`  Total time: ${totalElapsed}`);
   console.log(`  Phases completed: ${progress.phases.length}`);
 
-  // Cleanup worktrees
-  step("Cleaning up worktrees...");
+  // Cleanup worktree
+  step("Cleaning up worktree...");
   try {
-    cleanupWorktrees(cwd);
-    ok("Worktrees removed");
+    cleanupWorktree(cwd);
+    ok("Worktree removed");
   } catch {
-    console.log("    Could not remove worktrees automatically. Clean up manually.\n");
+    console.log("    Could not remove worktree automatically. Clean up manually.\n");
   }
 
   // Create PR

@@ -65,140 +65,38 @@ export function createFeatureBranch(cwd: string, slug: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Worktree setup
+// Single worktree — the engineer works here on the feature branch
 // ---------------------------------------------------------------------------
-
-export interface WorktreePaths {
-  engA: string;
-  engB: string;
-}
 
 export function worktreeDir(cwd: string): string {
   return join(cwd, ".murder", "worktrees");
 }
 
-export function setupWorktrees(
-  cwd: string,
-  slug: string
-): WorktreePaths {
+/**
+ * Create a single worktree checked out on the feature branch.
+ * Returns the absolute path to the worktree directory.
+ */
+export function setupWorktree(cwd: string, slug: string): string {
   const base = worktreeDir(cwd);
-  const engAPath = join(base, "eng-a");
-  const engBPath = join(base, "eng-b");
+  const wtPath = join(base, "work");
   const featureBranch = featureBranchName(slug);
 
-  const engABranch = `${featureBranch}--phase-1--eng-a`;
-  const engBBranch = `${featureBranch}--phase-1--eng-b`;
-
-  if (!existsSync(engAPath)) {
-    git(`worktree add "${engAPath}" -b ${engABranch} ${featureBranch}`, cwd);
+  if (!existsSync(wtPath)) {
+    git(`worktree add "${wtPath}" ${featureBranch}`, cwd);
   }
 
-  if (!existsSync(engBPath)) {
-    git(`worktree add "${engBPath}" -b ${engBBranch} ${featureBranch}`, cwd);
-  }
-
-  return { engA: engAPath, engB: engBPath };
-}
-
-// ---------------------------------------------------------------------------
-// Phase branch management
-// ---------------------------------------------------------------------------
-
-export function phaseBranchNames(
-  slug: string,
-  phaseNumber: number
-): { engA: string; engB: string } {
-  const base = featureBranchName(slug);
-  return {
-    engA: `${base}--phase-${phaseNumber}--eng-a`,
-    engB: `${base}--phase-${phaseNumber}--eng-b`,
-  };
+  return wtPath;
 }
 
 /**
- * Create or reset phase branches from the feature branch, and switch
- * each worktree to its respective branch.
+ * Remove the worktree and prune stale references.
  */
-export function setupPhaseBranches(
-  cwd: string,
-  slug: string,
-  phaseNumber: number
-): void {
-  const featureBranch = featureBranchName(slug);
-  const branches = phaseBranchNames(slug, phaseNumber);
-  const paths = {
-    engA: join(worktreeDir(cwd), "eng-a"),
-    engB: join(worktreeDir(cwd), "eng-b"),
-  };
-
-  for (const [key, branch] of Object.entries(branches) as ["engA" | "engB", string][]) {
-    const wtPath = paths[key];
-
-    if (branchExists(cwd, branch)) {
-      git(`branch -D ${branch}`, cwd);
-    }
-
-    git(`checkout -b ${branch} ${featureBranch}`, wtPath);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Merge phase branches back into the feature branch
-// ---------------------------------------------------------------------------
-
-export interface MergeResult {
-  clean: boolean;
-  conflicts: string[];
-}
-
-export function mergePhaseBranches(
-  cwd: string,
-  slug: string,
-  phaseNumber: number
-): MergeResult {
-  const featureBranch = featureBranchName(slug);
-  const branches = phaseBranchNames(slug, phaseNumber);
-  const conflicts: string[] = [];
-
-  const currentBranch = git("rev-parse --abbrev-ref HEAD", cwd);
-
-  git(`checkout ${featureBranch}`, cwd);
-
-  try {
-    for (const branch of [branches.engA, branches.engB]) {
-      const result = gitSafe(`merge ${branch} --no-edit`, cwd);
-      if (!result.ok) {
-        const conflictFiles = git("diff --name-only --diff-filter=U", cwd);
-        if (conflictFiles) {
-          conflicts.push(...conflictFiles.split("\n").filter(Boolean));
-        }
-        break;
-      }
-    }
-  } finally {
-    if (currentBranch !== featureBranch) {
-      gitSafe(`checkout ${currentBranch}`, cwd);
-    }
-  }
-
-  return {
-    clean: conflicts.length === 0,
-    conflicts,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Cleanup
-// ---------------------------------------------------------------------------
-
-export function cleanupWorktrees(cwd: string): void {
+export function cleanupWorktree(cwd: string): void {
   const base = worktreeDir(cwd);
+  const wtPath = join(base, "work");
 
-  for (const name of ["eng-a", "eng-b"]) {
-    const wtPath = join(base, name);
-    if (existsSync(wtPath)) {
-      gitSafe(`worktree remove "${wtPath}" --force`, cwd);
-    }
+  if (existsSync(wtPath)) {
+    gitSafe(`worktree remove "${wtPath}" --force`, cwd);
   }
 
   gitSafe("worktree prune", cwd);

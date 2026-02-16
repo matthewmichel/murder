@@ -15,7 +15,6 @@ export interface Section {
 }
 
 export interface EngineerProgress {
-  focus: string;
   status: "pending" | "in_progress" | "completed" | "failed";
   taskId: string | null;
   sections: Section[];
@@ -30,8 +29,7 @@ export interface Phase {
   number: number;
   name: string;
   status: "pending" | "in_progress" | "completed" | "failed";
-  engineerA: EngineerProgress;
-  engineerB: EngineerProgress;
+  engineer: EngineerProgress;
   review: PhaseReview;
 }
 
@@ -82,13 +80,10 @@ export function isAllComplete(progress: Progress): boolean {
 export function markEngineerStatus(
   progress: Progress,
   phaseIdx: number,
-  engineer: "A" | "B",
   status: EngineerProgress["status"],
   taskId?: string
 ): Progress {
-  const eng = engineer === "A"
-    ? progress.phases[phaseIdx].engineerA
-    : progress.phases[phaseIdx].engineerB;
+  const eng = progress.phases[phaseIdx].engineer;
   eng.status = status;
   if (taskId !== undefined) eng.taskId = taskId;
   return progress;
