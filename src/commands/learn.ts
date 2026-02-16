@@ -141,9 +141,9 @@ export async function learn() {
     ctx.architecture && "ARCHITECTURE.md",
     ctx.coreBeliefs && "core-beliefs.md",
     ctx.config && "config.ts",
-    ctx.pmKnowledge && "PM.md",
-    ctx.emKnowledge && "EM.md",
-    ctx.futureDirection && "FUTURE.md",
+    ctx.pmMd && "PM.md",
+    ctx.emMd && "EM.md",
+    ctx.futureMd && "FUTURE.md",
   ].filter(Boolean);
   ok(`Loaded ${contextParts.length} context files (${contextParts.join(", ")})`);
 

@@ -45,6 +45,8 @@ ${userRequest}
 
 ## Project Context
 
+The following is a directory of knowledge files available in this project. Use your file-reading tools to read any files relevant to your task.
+
 ${projectContext}
 
 ## Your Task
@@ -124,6 +126,8 @@ You are acting as a senior Engineering Manager. A PRD has been written and you n
 3. **Read the actual source code** as needed to understand the codebase structure.
 
 ## Project Context
+
+The following is a directory of knowledge files available in this project. Use your file-reading tools to read any files relevant to your task.
 
 ${projectContext}
 
@@ -277,6 +281,8 @@ ${prdContent}
 
 ## Project Context
 
+The following is a directory of knowledge files available in this project. Use your file-reading tools to read any files relevant to your task.
+
 ${projectContext}
 
 ## Rules
@@ -322,6 +328,8 @@ The engineer has completed their assigned tasks on the feature branch \`${featur
 ${workSummary}
 
 ## Project Context
+
+The following is a directory of knowledge files available in this project. Use your file-reading tools to read any files relevant to your task.
 
 ${projectContext}
 
@@ -408,6 +416,8 @@ ${progressContent}
 \`\`\`
 
 ## Project Context
+
+The following is a directory of knowledge files available in this project. Use your file-reading tools to read any files relevant to your task.
 
 ${projectContext}
 

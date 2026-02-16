@@ -315,8 +315,11 @@ export async function newTask() {
     ctx.architecture && "ARCHITECTURE.md",
     ctx.coreBeliefs && "core-beliefs.md",
     ctx.config && "config.ts",
+    ctx.pmMd && "PM.md",
+    ctx.emMd && "EM.md",
+    ctx.futureMd && "FUTURE.md",
   ].filter(Boolean);
-  ok(`Loaded ${contextParts.length} context files (${contextParts.join(", ")})`);
+  ok(`Found ${contextParts.length} knowledge files (${contextParts.join(", ")})`);
 
   // Step 6: Generate project name using agent
   step("Generating project name...");
