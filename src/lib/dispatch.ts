@@ -270,7 +270,7 @@ function buildShellCommand(
   const promptArg = `"$(cat '${promptFilePath}')"`;
   const modelFlag =
     preferredModel && preferredModel !== "auto"
-      ? `--model ${preferredModel} `
+      ? `--model '${preferredModel.replace(/'/g, "'\\''")}' `
       : "";
 
   if (outputFormat === "stream-json") {
