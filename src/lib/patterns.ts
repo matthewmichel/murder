@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Known stuck patterns — cheap first pass before calling the AI.
+// Known stuck patterns — regex-based detection for stuck agents.
 // Each pattern maps a regex to a diagnosis and recommended action.
 // ---------------------------------------------------------------------------
 
@@ -46,6 +46,19 @@ const SHARED_PATTERNS: StuckPattern[] = [
     diagnosis: "API quota or billing issue with the provider.",
     action: "kill",
   },
+  {
+    regex: /^(.{20,})\n(\1\n?){2,}/m,
+    diagnosis:
+      "The agent appears to be in a loop — repeated identical output detected.",
+    action: "kill",
+  },
+  {
+    regex:
+      /waiting for (?:input|response|user)|press (?:enter|any key)|y\/n\b|\(yes\/no\)/i,
+    diagnosis:
+      "The agent is waiting for user input and cannot proceed without interaction.",
+    action: "escalate",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -64,6 +77,12 @@ const CURSOR_PATTERNS: StuckPattern[] = [
     diagnosis:
       "The configured model is not available. Update the preferred model in agent settings (murder start or web UI).",
     action: "kill",
+  },
+  {
+    regex: /internal server error|unexpected error|something went wrong/i,
+    diagnosis:
+      "The agent backend encountered an internal error. Retrying may resolve the issue.",
+    action: "retry",
   },
 ];
 
@@ -94,11 +113,22 @@ export type PatternResult = PatternMatch | PatternNoMatch;
 /**
  * Scan the last chunk of agent output for known stuck patterns.
  * Checks agent-specific patterns first, then shared patterns.
+ * When trimmed output is empty or very short, escalates immediately.
  */
 export function matchStuckPattern(
   agentSlug: string,
   output: string
 ): PatternResult {
+  // Empty or whitespace-only output after a long run
+  if (output.trim().length < 5) {
+    return {
+      matched: true,
+      diagnosis:
+        "No meaningful output detected. The agent may be stuck or idle.",
+      action: "escalate",
+    };
+  }
+
   const agentSpecific = AGENT_PATTERNS[agentSlug] ?? [];
   const allPatterns = [...agentSpecific, ...SHARED_PATTERNS];
 
