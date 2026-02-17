@@ -16,14 +16,12 @@ src/index.ts (CLI router)
 src/commands/*.ts (command handler)
        │
        ├──► src/lib/db.ts ──► Postgres (port 1313)
-       ├──► src/lib/ai.ts ──► AI provider APIs (Anthropic, OpenAI, etc.)
        ├──► src/lib/dispatch.ts ──► Agent CLI process (Cursor CLI)
        │         │
        │         ▼
        │    src/lib/heartbeat.ts (monitor loop)
        │         │
-       │         ├──► src/lib/patterns.ts (regex stuck detection)
-       │         └──► src/lib/diagnosis.ts (AI-powered stuck diagnosis)
+       │         └──► src/lib/patterns.ts (regex stuck detection)
        │
        └──► src/lib/context.ts ──► .murder/ files in user's project
 ```
@@ -73,16 +71,14 @@ All agent work happens in an isolated git worktree (`.murder/worktrees/work/`) o
 ### Core Library (`src/lib/`)
 
 **AI & Providers:**
-- `ai.ts` — Resolves active AI config from DB, creates language/embedding models via Vercel AI SDK. Supports Anthropic (direct) and OpenAI-compatible providers (OpenAI, OpenRouter, Vercel AI Gateway, Voyage). Provider instances are cached by `slug:keyAlias`.
 - `providers.ts` — CRUD for AI providers, encrypted API key storage, config upserts.
 - `crypto.ts` — AES-256-GCM encryption. Master key stored at `~/.murder/secret.key` (auto-generated on first use).
 
 **Agent Dispatch & Monitoring:**
 - `agents.ts` — Detects installed agent CLIs via `which`, registers in DB. Currently only Cursor CLI (`agent` command).
 - `dispatch.ts` — Spawns agent process via `/bin/sh -c`, writes prompt to temp file (avoids arg length limits). Three output modes: `inherit` (full TTY), `stream-json` (parsed NDJSON events), `pipe` (silent log capture). Records task in DB.
-- `heartbeat.ts` — Monitors running agent by polling log file size. Detects silence (no output), runs pattern matching then AI diagnosis. Actions: continue, kill, retry, escalate.
+- `heartbeat.ts` — Monitors running agent by polling log file size. Detects silence (no output), runs regex pattern matching. Actions: continue, kill, retry, escalate.
 - `patterns.ts` — Regex patterns for known stuck states (rate limits, auth failures, OOM, etc.). Agent-specific patterns (Cursor CLI auth, invalid model).
-- `diagnosis.ts` — Sends recent agent output to orchestration model for verdict. Conservative — prefers "continue" over killing a working agent.
 - `preflight.ts` — Quick smoke test before dispatch: runs agent with a trivial prompt to verify it's responsive and authenticated.
 
 **Execution Pipeline:**
@@ -116,16 +112,11 @@ React Router v7 app with Tailwind CSS v4 + DaisyUI v5. Runs on port 1314 (config
 src/index.ts
   └── src/commands/*
         ├── src/lib/db.ts ─────────────────────────────► postgres (npm)
-        ├── src/lib/ai.ts ─────────────────────────────► @ai-sdk/openai, @ai-sdk/anthropic, ai
-        │     └── src/lib/crypto.ts ───────────────────► node:crypto
-        │     └── src/lib/db.ts
         ├── src/lib/dispatch.ts ───────────────────────► node:child_process, node:fs
         │     └── src/lib/db.ts
         ├── src/lib/heartbeat.ts
         │     ├── src/lib/dispatch.ts
-        │     ├── src/lib/patterns.ts
-        │     └── src/lib/diagnosis.ts
-        │           └── src/lib/ai.ts
+        │     └── src/lib/patterns.ts
         ├── src/lib/agents.ts ─────────────────────────► node:child_process
         │     ├── src/lib/db.ts
         │     ├── src/lib/models.ts
@@ -212,7 +203,7 @@ murder runs entirely locally. There is no deploy pipeline.
 
 **State management:** Database is the source of truth for providers, agents, tasks, and projects. The `.murder/` directory in user projects is the source of truth for project knowledge (AGENTS.md, ARCHITECTURE.md, core-beliefs.md, config.ts). Progress tracking during `murder new` uses atomic JSON file writes.
 
-**Agent monitoring:** Three-tier stuck detection: (1) regex pattern matching (cheap), (2) AI diagnosis via orchestration model (expensive, run once per silence window), (3) escalation to human after extended silence.
+**Agent monitoring:** Two-tier stuck detection: (1) regex pattern matching against known stuck states, (2) escalation to human after extended silence when no pattern matches.
 
 **Output modes:** Agent dispatch supports three modes — `inherit` (full TTY passthrough), `stream-json` (parsed NDJSON events with progress display), `pipe` (silent log capture for background tasks).
 

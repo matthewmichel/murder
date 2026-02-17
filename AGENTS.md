@@ -11,7 +11,6 @@ murder is a local CLI tool that orchestrates AI coding agents (currently Cursor 
 | Package manager | pnpm |
 | Database | Postgres 18 (Docker) on port 1313 |
 | Extensions | pgvector (embeddings), pg_cron (scheduled jobs) |
-| AI SDK | Vercel AI SDK (`ai`), `@ai-sdk/anthropic`, `@ai-sdk/openai` |
 | Memory | mem0ai + custom PGVectorStore |
 | Web UI | React Router v7, Tailwind CSS v4, DaisyUI v5 |
 | Encryption | AES-256-GCM for API keys (master key at `~/.murder/secret.key`) |
@@ -23,12 +22,10 @@ src/
 ├── index.ts              CLI entry point — routes commands to handlers
 ├── commands/             Command implementations (init, learn, new, start, stop, setup, status, project, reset)
 ├── lib/                  Core library modules
-│   ├── ai.ts             AI provider resolution + model factories
 │   ├── agents.ts         Agent detection, registration, model selection
 │   ├── context.ts        Reads .murder/ knowledge files (including PM.md, EM.md, FUTURE.md) for prompt injection
 │   ├── crypto.ts         AES-256-GCM encrypt/decrypt for API keys
 │   ├── db.ts             Postgres connection (postgres.js)
-│   ├── diagnosis.ts      AI-powered stuck agent diagnosis
 │   ├── dispatch.ts       Spawns agent processes, captures output, tracks tasks in DB
 │   ├── em-loop.ts        Engineer/Manager execution loop (phased work + review)
 │   ├── heartbeat.ts      Monitors running agents, detects stuck processes
