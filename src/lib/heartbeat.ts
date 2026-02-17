@@ -316,15 +316,13 @@ export async function monitorTask(
       );
     }
 
-    // No pattern matched and silence exceeds timeout — escalate directly
-    if (silenceMs > outputTimeoutMs) {
-      return handleStuckAction(
-        "escalate",
-        `No output for ${formatDuration(silenceMs)} and no known error pattern detected. The agent may be stuck.`,
-        handle,
-        currentBytes,
-        options
-      );
-    }
+    // No pattern matched — escalate directly
+    return handleStuckAction(
+      "escalate",
+      `No output for ${formatDuration(silenceMs)} and no known error pattern detected. The agent may be stuck.`,
+      handle,
+      currentBytes,
+      options
+    );
   }
 }
