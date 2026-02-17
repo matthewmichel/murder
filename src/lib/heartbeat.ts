@@ -7,7 +7,6 @@ import {
   markTaskKilled,
 } from "./dispatch.js";
 import { matchStuckPattern, type StuckAction } from "./patterns.js";
-import { diagnoseOutput } from "./diagnosis.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -243,7 +242,6 @@ export async function monitorTask(
   let lastOutputBytes = 0;
   let lastOutputTime = Date.now();
   let spinnerFrame = 0;
-  let aiCheckDone = false;
 
   while (true) {
     await sleep(checkIntervalMs);
@@ -256,7 +254,6 @@ export async function monitorTask(
     if (currentBytes > lastOutputBytes) {
       lastOutputBytes = currentBytes;
       lastOutputTime = now;
-      aiCheckDone = false;
 
       try {
         await updateTaskOutput(handle.taskId, currentBytes);
@@ -319,47 +316,7 @@ export async function monitorTask(
       );
     }
 
-    // Phase 2: AI diagnosis (expensive, run once per silence window)
-    if (!aiCheckDone) {
-      aiCheckDone = true;
-
-      try {
-        const aiResult = await diagnoseOutput(
-          handle.agentName,
-          recentOutput,
-          elapsedMs,
-          silenceMs,
-          projectId
-        );
-
-        if (aiResult.verdict !== "continue") {
-          return handleStuckAction(
-            aiResult.verdict,
-            aiResult.diagnosis,
-            handle,
-            currentBytes,
-            options
-          );
-        }
-
-        // AI says continue — extend the timeout window and keep monitoring
-        lastOutputTime = now;
-      } catch {
-        // AI diagnosis failed (no orchestration model configured, etc.)
-        // Fall back to conservative heuristic: escalate after 60s total silence
-        if (silenceMs > 60_000) {
-          return handleStuckAction(
-            "escalate",
-            `No output for ${formatDuration(silenceMs)} and AI diagnosis unavailable. The agent may be stuck.`,
-            handle,
-            currentBytes,
-            options
-          );
-        }
-      }
-    }
-
-    // If AI already checked and said continue, but silence persists beyond 2x timeout, escalate
+    // No pattern match — if silence persists beyond 2x timeout, escalate
     if (silenceMs > outputTimeoutMs * 2) {
       return handleStuckAction(
         "escalate",

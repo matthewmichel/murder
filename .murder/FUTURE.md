@@ -2,8 +2,6 @@
 
 ## Near-Term Priorities
 
-- **Remove Vercel AI SDK and direct model calling**: The `ai`, `@ai-sdk/anthropic`, and `@ai-sdk/openai` packages are used only for stuck detection diagnosis (`src/lib/diagnosis.ts`). The plan is to remove these entirely and rely solely on regex-based pattern matching for stuck detection (`src/lib/patterns.ts`). This simplifies the architecture and aligns with the agent-first direction where all AI work goes through agent backends.
-
 - **Remove mem0ai and PGVectorStore**: The `mem0ai` dependency and `src/lib/pgvector.ts` are wired up but not used in any command flow. These should be removed along with the `memory_migrations` and `mem0_memories` database tables.
 
 - **Remove @modelcontextprotocol/sdk and src/mcp/**: The MCP SDK dependency and the `src/mcp/` directory are unused. The git worktree approach replaced the original plan of spinning up separate Docker containers for each agent.
@@ -62,4 +60,4 @@
 
 - **Add new agent backends via if/else in dispatch**: When adding Claude Code or Codex CLI support, use an if/else approach in `buildShellCommand()` and `displayStreamEvent()` to handle each backend's CLI interface and output format, rather than building an adapter/strategy pattern. Keep it simple.
 
-- **Incremental dependency removal**: Remove unused dependencies one at a time in separate PRs: (1) `mem0ai` + `src/lib/pgvector.ts` + related DB tables, (2) `@modelcontextprotocol/sdk` + `src/mcp/`, (3) `ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai` + `src/lib/diagnosis.ts` + `src/lib/ai.ts` (replace stuck detection with regex-only). Each removal is independent and low-risk.
+- **Incremental dependency removal**: Remove unused dependencies one at a time in separate PRs: (1) `mem0ai` + `src/lib/pgvector.ts` + related DB tables, (2) `@modelcontextprotocol/sdk` + `src/mcp/`. Each removal is independent and low-risk.
