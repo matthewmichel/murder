@@ -1,0 +1,158 @@
+{
+  "slug": "hourly-feature-2026-02-16-4b8e",
+  "status": "in_progress",
+  "currentPhase": 1,
+  "startedAt": "2026-02-17T00:03:03.378Z",
+  "completedAt": null,
+  "phases": [
+    {
+      "number": 1,
+      "name": "Remove AI diagnosis from heartbeat and delete unused modules",
+      "status": "completed",
+      "engineer": {
+        "status": "completed",
+        "taskId": "2d023ff1-28ac-4687-9109-7566dc4b28fb",
+        "sections": [
+          {
+            "name": "Update heartbeat.ts to remove AI diagnosis",
+            "tasks": [
+              {
+                "description": "Remove the `import { diagnoseOutput } from \"./diagnosis.js\";` line from `src/lib/heartbeat.ts`",
+                "completed": false
+              },
+              {
+                "description": "Remove the `aiCheckDone` state variable declaration (`let aiCheckDone = false;`) and all references to it (the reset in the new-output block: `aiCheckDone = false;`)",
+                "completed": false
+              },
+              {
+                "description": "Remove the entire \"Phase 2: AI diagnosis\" block (lines 322-359 in current file) — the `if (!aiCheckDone)` block that calls `diagnoseOutput()` and its catch fallback",
+                "completed": false
+              },
+              {
+                "description": "After the pattern-matching block, when regex patterns don't match and silence exceeds `outputTimeoutMs * 2`, keep the existing escalation path that calls `handleStuckAction(\"escalate\", ...)` with the log duration message — this is already correct and remains as the fallback",
+                "completed": false
+              },
+              {
+                "description": "Verify the resulting logic flow is: check silence → pattern match → if no match and silence > 2x timeout → escalate",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Delete unused source files",
+            "tasks": [
+              {
+                "description": "Delete `src/lib/diagnosis.ts` entirely",
+                "completed": false
+              },
+              {
+                "description": "Delete `src/lib/ai.ts` entirely",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Remove npm packages",
+            "tasks": [
+              {
+                "description": "Remove `ai`, `@ai-sdk/anthropic`, and `@ai-sdk/openai` from the `dependencies` section of `package.json`",
+                "completed": false
+              },
+              {
+                "description": "Run `pnpm install` to update `pnpm-lock.yaml`",
+                "completed": false
+              }
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "completed",
+        "taskId": "e30f2a92-b5d8-4043-adfa-f3d0a639fc44"
+      }
+    },
+    {
+      "number": 2,
+      "name": "Update documentation and validate",
+      "status": "in_progress",
+      "engineer": {
+        "status": "in_progress",
+        "taskId": "86caa34f-27bd-4218-88f3-5eefe5256c70",
+        "sections": [
+          {
+            "name": "Update FUTURE.md",
+            "tasks": [
+              {
+                "description": "Remove the \"Remove Vercel AI SDK and direct model calling\" bullet from the Near-Term Priorities section in `.murder/FUTURE.md`",
+                "completed": false
+              },
+              {
+                "description": "Remove the `(3) ai + @ai-sdk/anthropic + @ai-sdk/openai + src/lib/diagnosis.ts + src/lib/ai.ts (replace stuck detection with regex-only)` sub-item from the \"Incremental dependency removal\" bullet in the Engineering Improvements section of `.murder/FUTURE.md`",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Update AGENTS.md",
+            "tasks": [
+              {
+                "description": "Remove `ai`, `@ai-sdk/anthropic`, and `@ai-sdk/openai` from the Tech Stack table's \"AI SDK\" row in `AGENTS.md` (the row can be removed entirely since no AI SDK remains)",
+                "completed": false
+              },
+              {
+                "description": "Remove the `ai.ts` and `diagnosis.ts` entries from the Directory Map in `AGENTS.md`",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Update ARCHITECTURE.md",
+            "tasks": [
+              {
+                "description": "Remove `src/lib/ai.ts ──► AI provider APIs` from the Core Data Flow diagram in `.murder/ARCHITECTURE.md`",
+                "completed": false
+              },
+              {
+                "description": "Remove `src/lib/diagnosis.ts (AI-powered stuck diagnosis)` from the Core Data Flow diagram in `.murder/ARCHITECTURE.md`",
+                "completed": false
+              },
+              {
+                "description": "Update the \"AI & Providers\" section under Key Modules to remove the `ai.ts` description",
+                "completed": false
+              },
+              {
+                "description": "Remove `diagnosis.ts` from the Key Modules section",
+                "completed": false
+              },
+              {
+                "description": "Update the Dependency Graph to remove `src/lib/ai.ts` and `src/lib/diagnosis.ts` entries and the `@ai-sdk/openai, @ai-sdk/anthropic, ai` dependency arrows",
+                "completed": false
+              },
+              {
+                "description": "Update the \"Known Patterns\" section: change \"Three-tier stuck detection\" to \"Two-tier stuck detection\" — remove the AI diagnosis tier description",
+                "completed": false
+              }
+            ]
+          },
+          {
+            "name": "Typecheck validation",
+            "tasks": [
+              {
+                "description": "Run `npx tsc --noEmit` and confirm zero errors",
+                "completed": false
+              },
+              {
+                "description": "Verify no files in `src/` import from `ai`, `@ai-sdk/anthropic`, `@ai-sdk/openai`, `diagnosis.js`, or `ai.js`",
+                "completed": false
+              }
+            ]
+          }
+        ]
+      },
+      "review": {
+        "status": "pending",
+        "taskId": null
+      }
+    }
+  ]
+}
